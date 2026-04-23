@@ -1,26 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { ScriptForgeWorkspace } from "@/components/ScriptForgeWorkspace";
+import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "ScriptForge AI — Cinematic Script Conversion & Narration" },
+      {
+        name: "description",
+        content:
+          "Convert rough Hindi, Hinglish, or broken English scripts into cinematic English screenplays with emotion-aware AI voice narration.",
+      },
+      { property: "og:title", content: "ScriptForge AI" },
+      {
+        property: "og:description",
+        content:
+          "Cinematic script conversion + AI voice narration powered by ElevenLabs.",
+      },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. For sites with multiple pages (About, Services, Contact, etc.),
-// create separate route files (about.tsx, services.tsx, contact.tsx) — don't put all pages in this file.
-function PlaceholderIndex() {
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
-  );
-}
-
 function Index() {
-  return <PlaceholderIndex />;
+  return (
+    <>
+      <div className="relative min-h-screen bg-spotlight">
+        <ScriptForgeWorkspace />
+      </div>
+      <Toaster theme="dark" position="top-center" />
+    </>
+  );
 }
