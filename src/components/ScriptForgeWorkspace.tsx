@@ -117,10 +117,21 @@ export function ScriptForgeWorkspace() {
     setStage({ kind: "thinking" });
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) {
+        const msg = "Please sign in to convert scripts.";
+        setStage({ kind: "error", message: msg });
+        toast.error(msg);
+        return;
+      }
       const res = await fetch("/api/convert", {
         method: "POST",
         signal: ctrl.signal,
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ script: input, mode }),
       });
       if (!res.ok || !res.body) {
