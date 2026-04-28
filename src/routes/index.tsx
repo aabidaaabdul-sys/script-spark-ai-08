@@ -1,22 +1,24 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ScriptForgeWorkspace } from "@/components/ScriptForgeWorkspace";
-import { AuthGate } from "@/components/AuthGate";
 import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ScriptForge AI — Cinematic Script Conversion & Narration" },
+      {
+        title:
+          "ScriptForge AI — Rough Hinglish to Professional English Scripts",
+      },
       {
         name: "description",
         content:
-          "Convert rough Hindi, Hinglish, or broken English scripts into cinematic English screenplays with emotion-aware AI voice narration.",
+          "Paste rough Hinglish or broken English. Get polished, professional, YouTube-ready English scripts instantly. No login required.",
       },
       { property: "og:title", content: "ScriptForge AI" },
       {
         property: "og:description",
         content:
-          "Cinematic script conversion + AI voice narration powered by ElevenLabs.",
+          "Convert rough Hinglish into world-class English scripts in seconds.",
       },
     ],
   }),
@@ -26,11 +28,9 @@ export const Route = createFileRoute("/")({
 function Index() {
   return (
     <>
-      <AuthGate>
-        <div className="relative min-h-screen bg-spotlight">
-          <ScriptForgeWorkspace />
-        </div>
-      </AuthGate>
+      <div className="relative min-h-screen bg-spotlight">
+        <ScriptForgeWorkspace />
+      </div>
       <Toaster theme="dark" position="top-center" />
     </>
   );
