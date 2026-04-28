@@ -118,6 +118,9 @@ export const Route = createFileRoute("/api/convert")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const authError = await verifyAuth(request);
+        if (authError) return authError;
+
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
           return new Response(
