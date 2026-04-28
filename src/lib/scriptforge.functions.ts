@@ -27,7 +27,7 @@ function sleep(ms: number) {
 }
 
 export const synthesizeNarration = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
+  .middleware([attachAuthHeader, requireSupabaseAuth])
   .inputValidator((input: unknown) => ttsSchema.parse(input))
   .handler(async ({ data }) => {
     const apiKey = process.env.ELEVENLABS_API_KEY;
