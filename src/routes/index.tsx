@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ScriptForgeWorkspace } from "@/components/ScriptForgeWorkspace";
+import { AuthGate } from "@/components/AuthGate";
 import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createFileRoute("/")({
@@ -25,9 +26,11 @@ export const Route = createFileRoute("/")({
 function Index() {
   return (
     <>
-      <div className="relative min-h-screen bg-spotlight">
-        <ScriptForgeWorkspace />
-      </div>
+      <AuthGate>
+        <div className="relative min-h-screen bg-spotlight">
+          <ScriptForgeWorkspace />
+        </div>
+      </AuthGate>
       <Toaster theme="dark" position="top-center" />
     </>
   );
