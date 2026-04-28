@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { synthesizeNarration } from "@/lib/scriptforge.functions";
+import { supabase } from "@/integrations/supabase/client";
 import {
   EMOTION_COLORS,
   EMOTION_VOICE_PRESETS,
