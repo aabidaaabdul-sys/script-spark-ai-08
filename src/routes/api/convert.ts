@@ -1,73 +1,58 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
 
-async function verifyAuth(request: Request): Promise<Response | null> {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-  const token = authHeader.slice(7);
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    return new Response(JSON.stringify({ error: "Auth not configured" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-  const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await supabase.auth.getClaims(token);
-  if (error || !data?.claims?.sub) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-  return null;
-}
+const MODES = [
+  "professional",
+  "viral",
+  "documentary",
+  "cinematic",
+  "storytelling",
+  "simple",
+] as const;
+type Mode = (typeof MODES)[number];
 
 const Body = z.object({
   script: z.string().min(1).max(60000),
-  mode: z.enum(["cinematic", "strict"]).default("cinematic"),
+  mode: z.enum(MODES).default("professional"),
 });
 
-const CINEMATIC_SYSTEM = `You are a master Hollywood screenwriter and editor.
+const SHARED_RULES = `
+ABSOLUTE MEANING-LOCK RULES (non-negotiable):
+- Preserve 100% of the original meaning, intent, emotion, and information.
+- Do NOT invent new facts, characters, examples, or plot points.
+- Do NOT remove any information present in the source.
+- Detect the original tone (dramatic / educational / motivational / documentary / casual) and KEEP it.
+- Auto-fix all grammar, spelling, and awkward phrasing.
+- Translate Hindi/Hinglish phrases to the most natural English equivalent that preserves intent.
+- Improve weak wording, tighten sentence structure, smooth transitions.
+- Sound like an expert human writer — never robotic, never AI-flavored.
+- Keep natural human rhythm and pacing.
+- Sharpen the opening hook so it grabs attention without changing meaning.
 
-You will receive a rough script that may be in Hindi, Hinglish, or broken English. Two-step thinking before you write:
-1. INTERNALLY extract the core meaning, emotional beats, characters, and story logic. Do not output this step.
-2. Then rewrite the script as a polished cinematic English screenplay.
+INTERNAL QUALITY CHECK (do this silently before producing output):
+1. Meaning fully preserved? 2. Grammar clean? 3. Wording professional? 4. Sounds human?
+5. Flow smooth? 6. No awkward translation? Only then return the final script.
 
-ABSOLUTE RULES (meaning-lock):
-- Preserve 100% of the original meaning, intent, emotion, and story logic.
-- Do NOT invent new plot points, characters, or settings.
-- Do NOT remove information present in the source.
-- If a Hinglish/Hindi phrase is ambiguous, choose the most natural English equivalent that preserves intent.
+OUTPUT: Return ONLY the rewritten English script. No preamble, no markdown fences, no commentary, no headings unless they exist in the source.
+`.trim();
 
-OUTPUT FORMAT (industry-standard screenplay):
-- Scene headings in CAPS on their own line: INT. LOCATION - DAY  /  EXT. LOCATION - NIGHT
-- Action lines in present tense, vivid but concise.
-- CHARACTER names in CAPS on their own line, immediately above their dialogue.
-- Parentheticals (lowercase, in parens) only when delivery cue is essential.
-- Blank line between blocks.
-- Break the script into clear scenes whenever the location, time, or focus changes.
+const STYLE_PROMPTS: Record<Mode, string> = {
+  professional: `You are a senior English content writer. Rewrite the user's rough Hinglish/broken-English text into clean, professional English suitable for high-quality publishing.\n\n${SHARED_RULES}`,
 
-Return ONLY the screenplay text. No preamble, no markdown fences, no commentary.`;
+  viral: `You are a top-tier YouTube scriptwriter who writes high-retention viral scripts. Rewrite the input into punchy, hook-driven, conversational English that holds attention sentence by sentence. Use short sentences, curiosity gaps, and momentum — but DO NOT change the meaning or add fake hype.\n\n${SHARED_RULES}`,
 
-const STRICT_SYSTEM = `You are a precise editor. Take the user's rough script (Hindi, Hinglish, or broken English) and produce clean, grammatical English.
+  documentary: `You are a documentary writer in the style of premium streaming docuseries. Rewrite the input as composed, factual, observational English narration with a measured, authoritative voice.\n\n${SHARED_RULES}`,
 
-RULES:
-- Preserve 100% of meaning, structure, and order.
-- Fix grammar, spelling, awkward phrasing only.
-- Do NOT reformat into screenplay style.
-- Do NOT add or remove content.
+  cinematic: `You are a cinematic narrator/screenwriter. Rewrite the input as evocative, vivid, image-rich English narration with cinematic pacing — like a film voice-over. Keep it grounded; do not invent imagery that isn't implied by the source.\n\n${SHARED_RULES}`,
 
-Return only the cleaned text.`;
+  storytelling: `You are a master storyteller. Rewrite the input as warm, immersive, story-driven English with natural narrative flow — scene-setting, emotional beats, and human rhythm — while preserving every fact and idea from the source.\n\n${SHARED_RULES}`,
+
+  simple: `You are an expert editor focused on clarity. Rewrite the input as clean, simple, plain English that anyone can understand. Short sentences, everyday words, zero jargon. Keep all original meaning.\n\n${SHARED_RULES}`,
+};
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 async function callOpenAIStream(
   apiKey: string,
@@ -87,7 +72,7 @@ async function callOpenAIStream(
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
-          temperature: 0.65,
+          temperature: 0.6,
           stream: true,
           messages: [
             { role: "system", content: system },
@@ -96,7 +81,7 @@ async function callOpenAIStream(
         }),
       });
       if (res.status === 429 || res.status >= 500) {
-        const txt = await res.text();
+        const txt = await res.text().catch(() => "");
         lastErr = new Error(`OpenAI ${res.status}: ${txt}`);
         await sleep(400 * Math.pow(2, attempt));
         continue;
@@ -110,17 +95,10 @@ async function callOpenAIStream(
   throw lastErr ?? new Error("OpenAI request failed");
 }
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 export const Route = createFileRoute("/api/convert")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const authError = await verifyAuth(request);
-        if (authError) return authError;
-
         const apiKey = process.env.OPENAI_API_KEY;
         if (!apiKey) {
           return new Response(
@@ -132,15 +110,14 @@ export const Route = createFileRoute("/api/convert")({
         let parsed;
         try {
           parsed = Body.parse(await request.json());
-        } catch (e) {
+        } catch {
           return new Response(
             JSON.stringify({ error: "Invalid request body" }),
             { status: 400, headers: { "Content-Type": "application/json" } },
           );
         }
 
-        const system =
-          parsed.mode === "cinematic" ? CINEMATIC_SYSTEM : STRICT_SYSTEM;
+        const system = STYLE_PROMPTS[parsed.mode];
 
         let upstream: Response;
         try {
@@ -153,9 +130,7 @@ export const Route = createFileRoute("/api/convert")({
         } catch (e) {
           console.error("convert: upstream failed", e);
           return new Response(
-            JSON.stringify({
-              error: "AI service unavailable. Please retry.",
-            }),
+            JSON.stringify({ error: "AI service unavailable. Please retry." }),
             { status: 502, headers: { "Content-Type": "application/json" } },
           );
         }
@@ -164,9 +139,7 @@ export const Route = createFileRoute("/api/convert")({
           const t = await upstream.text().catch(() => "");
           console.error("convert: bad upstream", upstream.status, t);
           return new Response(
-            JSON.stringify({
-              error: `AI gateway error (${upstream.status}).`,
-            }),
+            JSON.stringify({ error: `AI gateway error (${upstream.status}).` }),
             { status: 502, headers: { "Content-Type": "application/json" } },
           );
         }
