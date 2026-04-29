@@ -460,12 +460,12 @@ export function ScriptForgeWorkspace() {
       )}
 
       {/* Editors */}
-      <section className="mt-5 grid flex-1 gap-5 lg:grid-cols-2">
+      <section className="mt-5 grid flex-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Input */}
         <Glass>
           <PanelHeader
-            eyebrow="Input"
-            title="Your rough script"
+            eyebrow="Box 1 · Input"
+            title="Rough Script Input"
             sub="Hinglish · broken English · raw notes — paste anything"
             right={
               <div className="flex items-center gap-2">
