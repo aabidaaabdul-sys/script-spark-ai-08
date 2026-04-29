@@ -288,9 +288,9 @@ export function ScriptForgeWorkspace() {
       <section className="mt-7">
         <div className="mb-3 flex items-end justify-between">
           <div>
-            <h2 className="font-display text-base">Choose output style</h2>
+            <h2 className="font-display text-base">Choose screenplay style</h2>
             <p className="text-xs text-muted-foreground">
-              Tone is auto-preserved — style only changes how it&apos;s written.
+              Output is always real industry-standard screenplay format. Style sets the tone.
             </p>
           </div>
         </div>
