@@ -2,12 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 const MODES = [
-  "professional",
-  "viral",
+  "standard",
+  "thriller",
+  "drama",
   "documentary",
-  "cinematic",
-  "storytelling",
-  "simple",
+  "shortfilm",
+  "trailer",
 ] as const;
 type Mode = (typeof MODES)[number];
 
