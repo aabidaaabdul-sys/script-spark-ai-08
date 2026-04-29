@@ -474,7 +474,7 @@ Example:
             }
           />
           {output ? (
-            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-sans text-[14px] leading-relaxed sm:text-[15px]">
+            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.55] sm:text-[13.5px]">
               {output}
               {isBusy && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
