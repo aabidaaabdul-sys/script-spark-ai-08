@@ -425,7 +425,7 @@ Example:
                 size="lg"
                 className="bg-gradient-primary font-medium text-primary-foreground shadow-glow hover:opacity-95"
               >
-                <Sparkles className="mr-2 h-4 w-4" /> Convert to English
+                <Sparkles className="mr-2 h-4 w-4" /> Generate Screenplay
               </Button>
             )}
           </div>
