@@ -487,10 +487,10 @@ Example:
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Your professional English script will stream here.
+                  Your professionally formatted screenplay will stream here.
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
-                  Hooks · transitions · pacing — auto-improved
+                  Scene headings · action · dialogue · transitions
                 </p>
               </div>
             </div>
