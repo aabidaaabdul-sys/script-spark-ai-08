@@ -99,6 +99,7 @@ export function ScriptForgeWorkspace() {
   const abortRef = useRef<AbortController | null>(null);
   const hinglishAbortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef(0);
+  const outputRef = useRef<HTMLDivElement | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   // Restore draft + mode
@@ -202,6 +203,10 @@ export function ScriptForgeWorkspace() {
     startedAtRef.current = Date.now();
     setElapsed(0);
     setStage({ kind: "thinking" });
+    // Smoothly bring output into view on small screens
+    setTimeout(() => {
+      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
 
     try {
       const res = await fetch("/api/convert", {
@@ -355,7 +360,7 @@ export function ScriptForgeWorkspace() {
           : 0;
 
   return (
-    <div className="relative z-10 mx-auto flex min-h-screen max-w-[1400px] flex-col px-4 py-6 sm:px-6 sm:py-10">
+    <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1720px] flex-col px-4 py-6 sm:px-8 sm:py-10 lg:px-12">
       {/* Header */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
@@ -460,7 +465,10 @@ export function ScriptForgeWorkspace() {
       )}
 
       {/* Editors */}
-      <section className="mt-5 grid flex-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
+      <section
+        ref={outputRef}
+        className="mt-6 grid flex-1 gap-6 md:grid-cols-2 xl:grid-cols-3"
+      >
         {/* Input */}
         <Glass>
           <PanelHeader
@@ -497,7 +505,9 @@ export function ScriptForgeWorkspace() {
 
 Example:
 "Aaj main aapko ek aisi story bataunga jo aapki life change kar degi. Ye kahani hai ek ladke ki jo bilkul zero se start kiya tha..."`}
-            className="h-[52vh] resize-none border-0 bg-transparent px-0 text-[14px] leading-relaxed shadow-none focus-visible:ring-0 sm:text-[15px]"
+            className="h-[58vh] min-h-[420px] resize-none border-0 bg-transparent px-0 text-[14.5px] leading-relaxed shadow-none focus-visible:ring-0 sm:text-[15.5px]"
+            spellCheck={false}
+            autoComplete="off"
           />
           <div className="mt-3 flex items-center justify-between">
             <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -568,14 +578,14 @@ Example:
             }
           />
           {output ? (
-            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.55] sm:text-[13.5px]">
+            <pre className="h-[58vh] min-h-[420px] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.6] sm:text-[13.5px]">
               {output}
               {isBusy && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
               )}
             </pre>
           ) : (
-            <div className="flex h-[52vh] items-center justify-center text-center">
+            <div className="flex h-[58vh] min-h-[420px] items-center justify-center text-center">
               <div className="max-w-xs space-y-3">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/5">
                   <Sparkles className="h-5 w-5 text-primary" />
@@ -634,14 +644,14 @@ Example:
             }
           />
           {hinglish ? (
-            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.55] sm:text-[13.5px]">
+            <pre className="h-[58vh] min-h-[420px] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.6] sm:text-[13.5px]">
               {hinglish}
               {hinglishBusy && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
               )}
             </pre>
           ) : (
-            <div className="flex h-[52vh] items-center justify-center text-center">
+            <div className="flex h-[58vh] min-h-[420px] items-center justify-center text-center">
               <div className="max-w-xs space-y-3">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/5">
                   {hinglishBusy ? (
@@ -690,7 +700,7 @@ function Glass({
 }) {
   return (
     <div
-      className={`relative flex flex-col rounded-2xl border border-border/60 bg-card/50 p-4 shadow-elevated backdrop-blur-xl sm:p-5 ${
+      className={`relative flex min-w-0 flex-col rounded-2xl border border-border/60 bg-card/50 p-5 shadow-elevated backdrop-blur-xl transition-shadow duration-300 hover:shadow-glow sm:p-6 ${
         accent ? "bg-spotlight" : ""
       }`}
     >

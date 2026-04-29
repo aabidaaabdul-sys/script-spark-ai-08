@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ScriptForgeWorkspace } from "@/components/ScriptForgeWorkspace";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 
 export const Route = createFileRoute("/")({
@@ -29,7 +30,9 @@ function Index() {
   return (
     <>
       <div className="relative min-h-screen bg-spotlight">
-        <ScriptForgeWorkspace />
+        <ErrorBoundary>
+          <ScriptForgeWorkspace />
+        </ErrorBoundary>
       </div>
       <Toaster theme="dark" position="top-center" />
     </>
