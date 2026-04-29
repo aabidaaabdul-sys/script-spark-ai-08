@@ -274,7 +274,7 @@ export function ScriptForgeWorkspace() {
               ScriptForge <span className="text-gradient-primary">AI</span>
             </h1>
             <p className="mt-1.5 text-xs text-muted-foreground sm:text-sm">
-              Rough Hinglish → world-class English scripts. Instantly. No login.
+              Rough Hinglish → professional movie screenplay. Industry format. Instantly.
             </p>
           </div>
         </div>
