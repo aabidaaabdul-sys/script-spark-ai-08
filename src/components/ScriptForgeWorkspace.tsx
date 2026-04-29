@@ -590,6 +590,78 @@ Example:
             </div>
           )}
         </Glass>
+
+        {/* Hinglish Meaning */}
+        <Glass>
+          <PanelHeader
+            eyebrow="Box 3 · Hinglish Meaning"
+            title="Hinglish Meaning Version"
+            sub="Same screenplay · natural Roman Hindi · easy to understand"
+            right={
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {wordCount(hinglish)}w
+                </span>
+                {hinglish && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={copyHinglish}
+                    >
+                      {copiedHi ? (
+                        <>
+                          <Check className="mr-1 h-3 w-3" /> Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="mr-1 h-3 w-3" /> Copy
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={downloadHinglish}
+                    >
+                      <Download className="mr-1 h-3 w-3" /> .txt
+                    </Button>
+                  </>
+                )}
+              </div>
+            }
+          />
+          {hinglish ? (
+            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.55] sm:text-[13.5px]">
+              {hinglish}
+              {hinglishBusy && (
+                <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
+              )}
+            </pre>
+          ) : (
+            <div className="flex h-[52vh] items-center justify-center text-center">
+              <div className="max-w-xs space-y-3">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/5">
+                  {hinglishBusy ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  ) : (
+                    <Sparkles className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {hinglishBusy
+                    ? "Translating to natural Hinglish…"
+                    : "Hinglish meaning version will appear here automatically after the English script is generated."}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+                  Same scenes · same dialogue · same emotion
+                </p>
+              </div>
+            </div>
+          )}
+        </Glass>
       </section>
 
       {/* Footer trust strip */}
