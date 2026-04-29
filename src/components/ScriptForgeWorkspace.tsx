@@ -277,6 +277,8 @@ export function ScriptForgeWorkspace() {
 
   const cancelConvert = useCallback(() => {
     abortRef.current?.abort();
+    hinglishAbortRef.current?.abort();
+    setHinglishBusy(false);
     setStage({ kind: "idle" });
   }, []);
 
@@ -292,6 +294,18 @@ export function ScriptForgeWorkspace() {
     }
   }, [output]);
 
+  const copyHinglish = useCallback(async () => {
+    if (!hinglish) return;
+    try {
+      await navigator.clipboard.writeText(hinglish);
+      setCopiedHi(true);
+      toast.success("Hinglish copied");
+      setTimeout(() => setCopiedHi(false), 1500);
+    } catch {
+      toast.error("Copy failed");
+    }
+  }, [hinglish]);
+
   const downloadOutput = useCallback(() => {
     if (!output) return;
     const blob = new Blob([output], { type: "text/plain;charset=utf-8" });
@@ -302,6 +316,17 @@ export function ScriptForgeWorkspace() {
     a.click();
     URL.revokeObjectURL(url);
   }, [output, mode]);
+
+  const downloadHinglish = useCallback(() => {
+    if (!hinglish) return;
+    const blob = new Blob([hinglish], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `scriptforge-${mode}-hinglish.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [hinglish, mode]);
 
   // Shortcuts
   useEffect(() => {
