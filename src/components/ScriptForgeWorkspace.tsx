@@ -99,6 +99,7 @@ export function ScriptForgeWorkspace() {
   const abortRef = useRef<AbortController | null>(null);
   const hinglishAbortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef(0);
+  const outputRef = useRef<HTMLDivElement | null>(null);
   const [elapsed, setElapsed] = useState(0);
 
   // Restore draft + mode
@@ -202,6 +203,10 @@ export function ScriptForgeWorkspace() {
     startedAtRef.current = Date.now();
     setElapsed(0);
     setStage({ kind: "thinking" });
+    // Smoothly bring output into view on small screens
+    setTimeout(() => {
+      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
 
     try {
       const res = await fetch("/api/convert", {
