@@ -528,8 +528,8 @@ Example:
         {/* Output */}
         <Glass accent>
           <PanelHeader
-            eyebrow={`Screenplay · ${MODES.find((m) => m.id === mode)?.label}`}
-            title="Professional movie script"
+            eyebrow={`Box 2 · ${MODES.find((m) => m.id === mode)?.label}`}
+            title="Professional English Script"
             sub="Industry format · simple English · meaning preserved"
             right={
               <div className="flex items-center gap-2">
