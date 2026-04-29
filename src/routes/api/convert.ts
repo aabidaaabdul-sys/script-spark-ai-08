@@ -8,6 +8,7 @@ const MODES = [
   "documentary",
   "shortfilm",
   "trailer",
+  "hinglish",
 ] as const;
 type Mode = (typeof MODES)[number];
 
