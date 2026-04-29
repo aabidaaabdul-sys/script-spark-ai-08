@@ -480,6 +480,7 @@ export function ScriptForgeWorkspace() {
                     onClick={() => {
                       setInput("");
                       setOutput("");
+                      setHinglish("");
                       setStage({ kind: "idle" });
                     }}
                   >
