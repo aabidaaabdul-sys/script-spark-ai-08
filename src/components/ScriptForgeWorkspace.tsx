@@ -434,9 +434,9 @@ Example:
         {/* Output */}
         <Glass accent>
           <PanelHeader
-            eyebrow={`Output · ${MODES.find((m) => m.id === mode)?.label}`}
-            title="Polished English script"
-            sub="Meaning, tone & emotion preserved · grammar perfected"
+            eyebrow={`Screenplay · ${MODES.find((m) => m.id === mode)?.label}`}
+            title="Professional movie script"
+            sub="Industry format · simple English · meaning preserved"
             right={
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground">
