@@ -90,10 +90,14 @@ type Stage =
 export function ScriptForgeWorkspace() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
+  const [hinglish, setHinglish] = useState("");
+  const [hinglishBusy, setHinglishBusy] = useState(false);
   const [mode, setMode] = useState<Mode>("standard");
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
+  const [copiedHi, setCopiedHi] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const hinglishAbortRef = useRef<AbortController | null>(null);
   const startedAtRef = useRef(0);
   const [elapsed, setElapsed] = useState(0);
 
@@ -126,15 +130,75 @@ export function ScriptForgeWorkspace() {
   const outWords = useMemo(() => wordCount(output), [output]);
   const inChars = input.length;
 
+  const translateToHinglish = useCallback(async (englishScript: string) => {
+    if (!englishScript.trim()) return;
+    hinglishAbortRef.current?.abort();
+    const ctrl = new AbortController();
+    hinglishAbortRef.current = ctrl;
+    setHinglish("");
+    setHinglishBusy(true);
+    try {
+      const res = await fetch("/api/convert", {
+        method: "POST",
+        signal: ctrl.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script: englishScript, mode: "hinglish" }),
+      });
+      if (!res.ok || !res.body) {
+        setHinglishBusy(false);
+        return;
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buffer.indexOf("\n")) !== -1) {
+          let line = buffer.slice(0, nl);
+          buffer = buffer.slice(nl + 1);
+          if (line.endsWith("\r")) line = line.slice(0, -1);
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") continue;
+          try {
+            const parsed = JSON.parse(payload);
+            const delta = parsed.choices?.[0]?.delta?.content as
+              | string
+              | undefined;
+            if (delta) {
+              acc += delta;
+              setHinglish(acc);
+            }
+          } catch {
+            buffer = line + "\n" + buffer;
+            break;
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if ((err as { name?: string })?.name !== "AbortError") {
+        console.error("hinglish translate error", err);
+      }
+    } finally {
+      setHinglishBusy(false);
+    }
+  }, []);
+
   const handleConvert = useCallback(async () => {
     if (!input.trim()) {
       toast.error("Paste or type your rough script first.");
       return;
     }
     abortRef.current?.abort();
+    hinglishAbortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setOutput("");
+    setHinglish("");
     startedAtRef.current = Date.now();
     setElapsed(0);
     setStage({ kind: "thinking" });
@@ -195,6 +259,10 @@ export function ScriptForgeWorkspace() {
       toast.success(
         `Done in ${((Date.now() - startedAtRef.current) / 1000).toFixed(1)}s`,
       );
+      // Auto-generate Hinglish meaning version
+      if (acc.trim()) {
+        translateToHinglish(acc);
+      }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === "AbortError") {
         setStage({ kind: "idle" });
@@ -205,10 +273,12 @@ export function ScriptForgeWorkspace() {
       setStage({ kind: "error", message: msg });
       toast.error(msg);
     }
-  }, [input, mode]);
+  }, [input, mode, translateToHinglish]);
 
   const cancelConvert = useCallback(() => {
     abortRef.current?.abort();
+    hinglishAbortRef.current?.abort();
+    setHinglishBusy(false);
     setStage({ kind: "idle" });
   }, []);
 
@@ -224,6 +294,18 @@ export function ScriptForgeWorkspace() {
     }
   }, [output]);
 
+  const copyHinglish = useCallback(async () => {
+    if (!hinglish) return;
+    try {
+      await navigator.clipboard.writeText(hinglish);
+      setCopiedHi(true);
+      toast.success("Hinglish copied");
+      setTimeout(() => setCopiedHi(false), 1500);
+    } catch {
+      toast.error("Copy failed");
+    }
+  }, [hinglish]);
+
   const downloadOutput = useCallback(() => {
     if (!output) return;
     const blob = new Blob([output], { type: "text/plain;charset=utf-8" });
@@ -234,6 +316,17 @@ export function ScriptForgeWorkspace() {
     a.click();
     URL.revokeObjectURL(url);
   }, [output, mode]);
+
+  const downloadHinglish = useCallback(() => {
+    if (!hinglish) return;
+    const blob = new Blob([hinglish], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `scriptforge-${mode}-hinglish.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [hinglish, mode]);
 
   // Shortcuts
   useEffect(() => {
@@ -367,12 +460,12 @@ export function ScriptForgeWorkspace() {
       )}
 
       {/* Editors */}
-      <section className="mt-5 grid flex-1 gap-5 lg:grid-cols-2">
+      <section className="mt-5 grid flex-1 gap-5 lg:grid-cols-2 xl:grid-cols-3">
         {/* Input */}
         <Glass>
           <PanelHeader
-            eyebrow="Input"
-            title="Your rough script"
+            eyebrow="Box 1 · Input"
+            title="Rough Script Input"
             sub="Hinglish · broken English · raw notes — paste anything"
             right={
               <div className="flex items-center gap-2">
@@ -387,6 +480,7 @@ export function ScriptForgeWorkspace() {
                     onClick={() => {
                       setInput("");
                       setOutput("");
+                      setHinglish("");
                       setStage({ kind: "idle" });
                     }}
                   >
@@ -434,8 +528,8 @@ Example:
         {/* Output */}
         <Glass accent>
           <PanelHeader
-            eyebrow={`Screenplay · ${MODES.find((m) => m.id === mode)?.label}`}
-            title="Professional movie script"
+            eyebrow={`Box 2 · ${MODES.find((m) => m.id === mode)?.label}`}
+            title="Professional English Script"
             sub="Industry format · simple English · meaning preserved"
             right={
               <div className="flex items-center gap-2">
@@ -491,6 +585,78 @@ Example:
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
                   Scene headings · action · dialogue · transitions
+                </p>
+              </div>
+            </div>
+          )}
+        </Glass>
+
+        {/* Hinglish Meaning */}
+        <Glass>
+          <PanelHeader
+            eyebrow="Box 3 · Hinglish Meaning"
+            title="Hinglish Meaning Version"
+            sub="Same screenplay · natural Roman Hindi · easy to understand"
+            right={
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {wordCount(hinglish)}w
+                </span>
+                {hinglish && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={copyHinglish}
+                    >
+                      {copiedHi ? (
+                        <>
+                          <Check className="mr-1 h-3 w-3" /> Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="mr-1 h-3 w-3" /> Copy
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-2 text-xs"
+                      onClick={downloadHinglish}
+                    >
+                      <Download className="mr-1 h-3 w-3" /> .txt
+                    </Button>
+                  </>
+                )}
+              </div>
+            }
+          />
+          {hinglish ? (
+            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.55] sm:text-[13.5px]">
+              {hinglish}
+              {hinglishBusy && (
+                <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
+              )}
+            </pre>
+          ) : (
+            <div className="flex h-[52vh] items-center justify-center text-center">
+              <div className="max-w-xs space-y-3">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-primary/30 bg-primary/5">
+                  {hinglishBusy ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  ) : (
+                    <Sparkles className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {hinglishBusy
+                    ? "Translating to natural Hinglish…"
+                    : "Hinglish meaning version will appear here automatically after the English script is generated."}
+                </p>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+                  Same scenes · same dialogue · same emotion
                 </p>
               </div>
             </div>

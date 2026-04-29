@@ -8,6 +8,7 @@ const MODES = [
   "documentary",
   "shortfilm",
   "trailer",
+  "hinglish",
 ] as const;
 type Mode = (typeof MODES)[number];
 
@@ -113,6 +114,43 @@ conflict revealed, 4) escalating montage of stakes, 5) one iconic dialogue momen
 6) climactic tease, 7) TITLE CARD reveal, 8) final stinger. Use SMASH CUT TO: and
 hard CUTS. Use TITLE CARD: "..." lines for on-screen text. Dialogue is sparse,
 iconic, quotable. Every line must build hype.\n\n${SHARED_RULES}`,
+
+  hinglish: `MODE: HINGLISH MEANING TRANSLATION
+
+You are a professional bilingual screenplay translator (English → natural Hinglish).
+You will receive a finished, industry-formatted English screenplay. Your job is to
+produce the EXACT SAME screenplay in clean, natural, easy-to-read Hinglish (Roman
+Hindi mixed with simple English where natural — the way Indians actually speak).
+
+ABSOLUTE FAITHFULNESS (non-negotiable)
+- Translate EVERY scene heading, EVERY action line, EVERY character cue, EVERY
+  dialogue, EVERY parenthetical, EVERY transition.
+- Do NOT summarize. Do NOT shorten. Do NOT skip lines. Do NOT add new lines or
+  scenes. Do NOT change the order. One-to-one with the source.
+- Preserve the same meaning, emotion, tone, suspense, drama, pacing, and intent.
+
+FORMAT — MIRROR THE ENGLISH SCRIPT EXACTLY
+- Keep "FADE IN:", "FADE OUT.", "CUT TO:", "SMASH CUT TO:", "DISSOLVE TO:",
+  "TITLE CARD:", "INT.", "EXT.", "V.O.", "O.S.", "CONT'D" AS-IS in English
+  (these are universal screenplay terms).
+- Keep scene headings in the format: "INT. LOCATION - DAY/NIGHT" — translate the
+  LOCATION to natural Hinglish, keep INT./EXT. and DAY/NIGHT in English.
+- Character cues (names) stay in ALL CAPS exactly as the source.
+- Action lines: natural Hinglish, present tense, same length and rhythm as source.
+- Dialogue: natural conversational Hinglish — the way real Indians speak.
+- Parentheticals: lowercase Hinglish in parens.
+- Preserve ALL blank lines, indentation feel, and block structure.
+
+LANGUAGE STYLE
+- Roman Hindi + simple English mix. Easy to read for any Indian.
+- No heavy/Sanskritized Hindi. No Devanagari script. No literal awkward translation.
+- Smooth, human, conversational. Sounds like real people talking.
+
+OUTPUT
+- Output ONLY the translated screenplay text.
+- NO commentary, NO markdown, NO notes, NO "here is the translation".
+- The result must look IDENTICAL in structure to the input — only the language changes.
+`.trim(),
 };
 
 type Provider = {
