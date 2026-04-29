@@ -259,6 +259,10 @@ export function ScriptForgeWorkspace() {
       toast.success(
         `Done in ${((Date.now() - startedAtRef.current) / 1000).toFixed(1)}s`,
       );
+      // Auto-generate Hinglish meaning version
+      if (acc.trim()) {
+        translateToHinglish(acc);
+      }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === "AbortError") {
         setStage({ kind: "idle" });
@@ -269,7 +273,7 @@ export function ScriptForgeWorkspace() {
       setStage({ kind: "error", message: msg });
       toast.error(msg);
     }
-  }, [input, mode]);
+  }, [input, mode, translateToHinglish]);
 
   const cancelConvert = useCallback(() => {
     abortRef.current?.abort();
