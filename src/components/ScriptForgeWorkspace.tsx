@@ -90,7 +90,7 @@ type Stage =
 export function ScriptForgeWorkspace() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [mode, setMode] = useState<Mode>("professional");
+  const [mode, setMode] = useState<Mode>("standard");
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
