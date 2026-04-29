@@ -24,12 +24,12 @@ const STORAGE_KEY = "scriptforge.input.v2";
 const MODE_KEY = "scriptforge.mode.v2";
 
 type Mode =
-  | "professional"
-  | "viral"
+  | "standard"
+  | "thriller"
+  | "drama"
   | "documentary"
-  | "cinematic"
-  | "storytelling"
-  | "simple";
+  | "shortfilm"
+  | "trailer";
 
 const MODES: {
   id: Mode;
@@ -38,40 +38,40 @@ const MODES: {
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
   {
-    id: "professional",
-    label: "Professional English",
-    desc: "Clean, polished, publish-ready",
-    icon: Feather,
-  },
-  {
-    id: "viral",
-    label: "YouTube Viral",
-    desc: "High-retention hooks & pacing",
-    icon: Flame,
-  },
-  {
-    id: "documentary",
-    label: "Documentary",
-    desc: "Composed, factual narration",
+    id: "standard",
+    label: "Standard Movie Script",
+    desc: "Industry-standard screenplay format",
     icon: Film,
   },
   {
-    id: "cinematic",
-    label: "Cinematic Narration",
-    desc: "Vivid, image-rich voice-over",
-    icon: Clapperboard,
+    id: "thriller",
+    label: "Thriller Script",
+    desc: "Tense, suspenseful, sharp dialogue",
+    icon: Flame,
   },
   {
-    id: "storytelling",
-    label: "Storytelling",
-    desc: "Warm, immersive, narrative",
+    id: "drama",
+    label: "Emotional Drama",
+    desc: "Heartfelt, grounded, human beats",
     icon: BookOpen,
   },
   {
-    id: "simple",
-    label: "Simple Clean English",
-    desc: "Plain, clear, anyone can read",
+    id: "documentary",
+    label: "Documentary Script",
+    desc: "Narrator V.O. + observational scenes",
+    icon: Feather,
+  },
+  {
+    id: "shortfilm",
+    label: "Short Film Script",
+    desc: "Tight single arc, every line earns it",
     icon: Type,
+  },
+  {
+    id: "trailer",
+    label: "Cinematic Trailer",
+    desc: "Punchy beats, hard cuts, big finish",
+    icon: Clapperboard,
   },
 ];
 
@@ -90,7 +90,7 @@ type Stage =
 export function ScriptForgeWorkspace() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
-  const [mode, setMode] = useState<Mode>("professional");
+  const [mode, setMode] = useState<Mode>("standard");
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -274,7 +274,7 @@ export function ScriptForgeWorkspace() {
               ScriptForge <span className="text-gradient-primary">AI</span>
             </h1>
             <p className="mt-1.5 text-xs text-muted-foreground sm:text-sm">
-              Rough Hinglish → world-class English scripts. Instantly. No login.
+              Rough Hinglish → professional movie screenplay. Industry format. Instantly.
             </p>
           </div>
         </div>
@@ -288,9 +288,9 @@ export function ScriptForgeWorkspace() {
       <section className="mt-7">
         <div className="mb-3 flex items-end justify-between">
           <div>
-            <h2 className="font-display text-base">Choose output style</h2>
+            <h2 className="font-display text-base">Choose screenplay style</h2>
             <p className="text-xs text-muted-foreground">
-              Tone is auto-preserved — style only changes how it&apos;s written.
+              Output is always real industry-standard screenplay format. Style sets the tone.
             </p>
           </div>
         </div>
@@ -425,7 +425,7 @@ Example:
                 size="lg"
                 className="bg-gradient-primary font-medium text-primary-foreground shadow-glow hover:opacity-95"
               >
-                <Sparkles className="mr-2 h-4 w-4" /> Convert to English
+                <Sparkles className="mr-2 h-4 w-4" /> Generate Screenplay
               </Button>
             )}
           </div>
@@ -434,9 +434,9 @@ Example:
         {/* Output */}
         <Glass accent>
           <PanelHeader
-            eyebrow={`Output · ${MODES.find((m) => m.id === mode)?.label}`}
-            title="Polished English script"
-            sub="Meaning, tone & emotion preserved · grammar perfected"
+            eyebrow={`Screenplay · ${MODES.find((m) => m.id === mode)?.label}`}
+            title="Professional movie script"
+            sub="Industry format · simple English · meaning preserved"
             right={
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -474,7 +474,7 @@ Example:
             }
           />
           {output ? (
-            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-sans text-[14px] leading-relaxed sm:text-[15px]">
+            <pre className="h-[52vh] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.55] sm:text-[13.5px]">
               {output}
               {isBusy && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
@@ -487,10 +487,10 @@ Example:
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Your professional English script will stream here.
+                  Your professionally formatted screenplay will stream here.
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
-                  Hooks · transitions · pacing — auto-improved
+                  Scene headings · action · dialogue · transitions
                 </p>
               </div>
             </div>
