@@ -24,12 +24,12 @@ const STORAGE_KEY = "scriptforge.input.v2";
 const MODE_KEY = "scriptforge.mode.v2";
 
 type Mode =
-  | "professional"
-  | "viral"
+  | "standard"
+  | "thriller"
+  | "drama"
   | "documentary"
-  | "cinematic"
-  | "storytelling"
-  | "simple";
+  | "shortfilm"
+  | "trailer";
 
 const MODES: {
   id: Mode;
@@ -38,40 +38,40 @@ const MODES: {
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
   {
-    id: "professional",
-    label: "Professional English",
-    desc: "Clean, polished, publish-ready",
-    icon: Feather,
-  },
-  {
-    id: "viral",
-    label: "YouTube Viral",
-    desc: "High-retention hooks & pacing",
-    icon: Flame,
-  },
-  {
-    id: "documentary",
-    label: "Documentary",
-    desc: "Composed, factual narration",
+    id: "standard",
+    label: "Standard Movie Script",
+    desc: "Industry-standard screenplay format",
     icon: Film,
   },
   {
-    id: "cinematic",
-    label: "Cinematic Narration",
-    desc: "Vivid, image-rich voice-over",
-    icon: Clapperboard,
+    id: "thriller",
+    label: "Thriller Script",
+    desc: "Tense, suspenseful, sharp dialogue",
+    icon: Flame,
   },
   {
-    id: "storytelling",
-    label: "Storytelling",
-    desc: "Warm, immersive, narrative",
+    id: "drama",
+    label: "Emotional Drama",
+    desc: "Heartfelt, grounded, human beats",
     icon: BookOpen,
   },
   {
-    id: "simple",
-    label: "Simple Clean English",
-    desc: "Plain, clear, anyone can read",
+    id: "documentary",
+    label: "Documentary Script",
+    desc: "Narrator V.O. + observational scenes",
+    icon: Feather,
+  },
+  {
+    id: "shortfilm",
+    label: "Short Film Script",
+    desc: "Tight single arc, every line earns it",
     icon: Type,
+  },
+  {
+    id: "trailer",
+    label: "Cinematic Trailer",
+    desc: "Punchy beats, hard cuts, big finish",
+    icon: Clapperboard,
   },
 ];
 
