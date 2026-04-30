@@ -372,7 +372,7 @@ function formatScreenplayLine(line: string, rtl: boolean): Paragraph {
   if (!trimmed) {
     return new Paragraph({ children: [new TextRun({ text: "" })] });
   }
-  const align: AlignmentType = rtl ? AlignmentType.RIGHT : AlignmentType.LEFT;
+  const align = rtl ? AlignmentType.RIGHT : AlignmentType.LEFT;
   const bidi = rtl;
 
   if (isSceneHeading(trimmed)) {
