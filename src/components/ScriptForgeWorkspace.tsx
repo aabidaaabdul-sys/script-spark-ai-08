@@ -87,11 +87,21 @@ type Stage =
   | { kind: "done" }
   | { kind: "error"; message: string };
 
+type Lang = "hinglish" | "hindi" | "urdu" | "english";
+
+const LANG_META: Record<Lang, { label: string; mode: string; rtl: boolean; font?: string }> = {
+  hinglish: { label: "Hinglish Meaning", mode: "hinglish", rtl: false },
+  hindi: { label: "Hindi Meaning", mode: "hindi", rtl: false, font: '"Noto Sans Devanagari", "Mangal", system-ui, sans-serif' },
+  urdu: { label: "Urdu Meaning", mode: "urdu", rtl: true, font: '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Naskh Arabic", serif' },
+  english: { label: "English Meaning", mode: "english_meaning", rtl: false },
+};
+
 export function ScriptForgeWorkspace() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [hinglish, setHinglish] = useState("");
   const [hinglishBusy, setHinglishBusy] = useState(false);
+  const [detectedLang, setDetectedLang] = useState<Lang>("hinglish");
   const [mode, setMode] = useState<Mode>("standard");
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
