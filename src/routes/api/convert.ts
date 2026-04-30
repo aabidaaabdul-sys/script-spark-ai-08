@@ -207,6 +207,93 @@ OUTPUT
 - NO commentary, NO markdown, NO notes, NO "here is the translation".
 - The result must look STRUCTURALLY IDENTICAL to the input — only the language changes.
 `.trim(),
+
+  hindi: `MODE: HINDI MEANING TRANSLATION (PREMIUM, DEVANAGARI)
+
+You are a senior bilingual screenwriter. Translate the finished English screenplay
+into clean, natural, emotionally accurate HINDI in proper DEVANAGARI script.
+
+ABSOLUTE FAITHFULNESS
+- Translate EVERY scene heading, action line, character cue, dialogue, parenthetical,
+  and transition — in the SAME order. ONE-TO-ONE with the source.
+- Do NOT summarize, shorten, skip, or add lines. Preserve meaning, emotion, suspense,
+  drama, tone, pacing, intent, and subtext exactly.
+
+LANGUAGE
+- Use proper, readable Devanagari Hindi. Natural, modern, conversational.
+- Avoid heavy/archaic Sanskritized words unless the scene demands it.
+- Dialogue must sound like real people speaking modern Hindi.
+
+FORMAT — MIRROR THE ENGLISH SCRIPT EXACTLY
+- Keep universal screenplay terms in English: FADE IN:, FADE OUT., CUT TO:,
+  SMASH CUT TO:, DISSOLVE TO:, MATCH CUT TO:, TITLE CARD:, INT., EXT., V.O.,
+  O.S., CONT'D, NARRATOR.
+- Scene heading: "INT. <स्थान> - DAY/NIGHT" — translate the LOCATION to Hindi
+  (Devanagari), keep INT./EXT. and DAY/NIGHT/DAWN/DUSK in English.
+- Character cues stay in ALL CAPS English exactly as the source.
+- Action lines: present tense, Devanagari Hindi, same length and rhythm.
+- Dialogue: natural Hindi in Devanagari. Parentheticals: lowercase Hindi in parens.
+- Preserve all blank lines and block structure.
+
+OUTPUT
+- Output ONLY the translated screenplay text. No commentary, no markdown, no notes.
+`.trim(),
+
+  urdu: `MODE: URDU MEANING TRANSLATION (PREMIUM, NASTA'LIQ SCRIPT)
+
+You are a senior bilingual screenwriter. Translate the finished English screenplay
+into clean, natural, emotionally accurate URDU in proper Urdu script (Arabic-based,
+right-to-left).
+
+ABSOLUTE FAITHFULNESS
+- Translate EVERY scene heading, action line, character cue, dialogue, parenthetical,
+  and transition — in the SAME order. ONE-TO-ONE with the source.
+- Do NOT summarize, shorten, skip, or add lines. Preserve meaning, emotion, suspense,
+  drama, tone, pacing, intent, and subtext exactly.
+
+LANGUAGE
+- Use proper, elegant, readable Urdu. Natural and modern, the way real Urdu speakers
+  talk in films and dramas. Avoid heavy/archaic vocabulary unless the scene demands it.
+- Dialogue must sound like real human speech in Urdu.
+
+FORMAT — MIRROR THE ENGLISH SCRIPT EXACTLY
+- Keep universal screenplay terms in English (left-to-right): FADE IN:, FADE OUT.,
+  CUT TO:, SMASH CUT TO:, DISSOLVE TO:, MATCH CUT TO:, TITLE CARD:, INT., EXT.,
+  V.O., O.S., CONT'D, NARRATOR.
+- Scene heading: "INT. <مقام> - DAY/NIGHT" — translate the LOCATION to Urdu, keep
+  INT./EXT. and DAY/NIGHT/DAWN/DUSK in English.
+- Character cues stay in ALL CAPS English exactly as the source (so they remain
+  recognizable on a shoot).
+- Action lines and dialogue in Urdu script. Parentheticals: lowercase Urdu in parens.
+- Preserve all blank lines and block structure.
+
+OUTPUT
+- Output ONLY the translated screenplay text. No commentary, no markdown, no notes.
+`.trim(),
+
+  english_meaning: `MODE: ENGLISH PLAIN-MEANING VERSION
+
+You receive a finished, industry-formatted English screenplay. Produce a SIMPLIFIED,
+plain-English meaning version that mirrors the screenplay one-to-one.
+
+ABSOLUTE FAITHFULNESS
+- Mirror EVERY scene heading, action line, character cue, dialogue, parenthetical,
+  and transition — in the SAME order. ONE-TO-ONE with the source.
+- Do NOT summarize, shorten, skip, or add lines. Preserve meaning, emotion, tone,
+  pacing, intent, and subtext exactly.
+
+LANGUAGE
+- Use very simple, clear, modern English. Short sentences. No literary/flowery words.
+- Dialogue stays natural and human. Action stays visual and concrete.
+
+FORMAT
+- Identical screenplay format as the source. Keep FADE IN:, INT./EXT., DAY/NIGHT,
+  CUT TO:, character cues in ALL CAPS, etc., exactly as in the source.
+- Preserve all blank lines and block structure.
+
+OUTPUT
+- Output ONLY the simplified screenplay text. No commentary, no markdown, no notes.
+`.trim(),
 };
 
 type Provider = {
