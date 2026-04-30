@@ -246,43 +246,6 @@ export function ScriptForgeWorkspace() {
           : "hinglish";
       setDetectedLang(lang);
 
-  const handleConvert = useCallback(async () => {
-    if (!input.trim()) {
-      toast.error("Paste or type your rough script first.");
-      return;
-    }
-    abortRef.current?.abort();
-    hinglishAbortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-    setOutput("");
-    setHinglish("");
-    startedAtRef.current = Date.now();
-    setElapsed(0);
-    setStage({ kind: "thinking" });
-    // Smoothly bring output into view on small screens
-    setTimeout(() => {
-      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 60);
-
-    try {
-      const res = await fetch("/api/convert", {
-        method: "POST",
-        signal: ctrl.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: input, mode }),
-      });
-      if (!res.ok || !res.body) {
-        let msg = "Conversion failed.";
-        try {
-          const j = await res.json();
-          if (j?.error) msg = j.error;
-        } catch {}
-        setStage({ kind: "error", message: msg });
-        toast.error(msg);
-        return;
-      }
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
@@ -321,9 +284,9 @@ export function ScriptForgeWorkspace() {
       toast.success(
         `Done in ${((Date.now() - startedAtRef.current) / 1000).toFixed(1)}s`,
       );
-      // Auto-generate Hinglish meaning version
+      // Auto-generate meaning version in the user's original input language
       if (acc.trim()) {
-        translateToHinglish(acc);
+        translateToHinglish(acc, LANG_META[lang].mode);
       }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === "AbortError") {
