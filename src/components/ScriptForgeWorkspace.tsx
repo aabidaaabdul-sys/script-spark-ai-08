@@ -621,12 +621,20 @@ Example:
           )}
         </Glass>
 
-        {/* Hinglish Meaning */}
+        {/* Meaning Version (auto-language) */}
         <Glass>
           <PanelHeader
-            eyebrow="Box 3 · Hinglish Meaning"
-            title="Hinglish Meaning Version"
-            sub="Same screenplay · natural Roman Hindi · easy to understand"
+            eyebrow={`Box 3 · ${LANG_META[detectedLang].label}`}
+            title={`${LANG_META[detectedLang].label} Version`}
+            sub={
+              detectedLang === "urdu"
+                ? "Same screenplay · natural Urdu · right-to-left"
+                : detectedLang === "hindi"
+                  ? "Same screenplay · clean Devanagari Hindi · easy to read"
+                  : detectedLang === "english"
+                    ? "Same screenplay · simple plain English · easy to read"
+                    : "Same screenplay · natural Roman Hindi · easy to understand"
+            }
             right={
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -664,7 +672,26 @@ Example:
             }
           />
           {hinglish ? (
-            <pre className="h-[clamp(320px,55vh,760px)] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.6] sm:text-[13.5px]">
+            <pre
+              dir={LANG_META[detectedLang].rtl ? "rtl" : "ltr"}
+              lang={
+                detectedLang === "hindi"
+                  ? "hi"
+                  : detectedLang === "urdu"
+                    ? "ur"
+                    : "en"
+              }
+              className={`h-[clamp(320px,55vh,760px)] overflow-auto whitespace-pre-wrap px-0 ${
+                detectedLang === "hindi" || detectedLang === "urdu"
+                  ? "text-[15px] leading-[1.85] sm:text-[16px]"
+                  : "font-mono text-[13px] leading-[1.6] sm:text-[13.5px]"
+              } ${LANG_META[detectedLang].rtl ? "text-right" : ""}`}
+              style={
+                LANG_META[detectedLang].font
+                  ? { fontFamily: LANG_META[detectedLang].font }
+                  : undefined
+              }
+            >
               {hinglish}
               {hinglishBusy && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
@@ -682,11 +709,11 @@ Example:
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {hinglishBusy
-                    ? "Translating to natural Hinglish…"
-                    : "Hinglish meaning version will appear here automatically after the English script is generated."}
+                    ? `Translating to natural ${LANG_META[detectedLang].label.replace(" Meaning", "")}…`
+                    : "Meaning version will appear here automatically — in the same language you wrote your script."}
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
-                  Same scenes · same dialogue · same emotion
+                  Auto-detects Hinglish · Hindi · Urdu · English
                 </p>
               </div>
             </div>
