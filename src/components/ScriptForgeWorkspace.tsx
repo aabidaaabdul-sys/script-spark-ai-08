@@ -467,7 +467,7 @@ export function ScriptForgeWorkspace() {
       {/* Editors */}
       <section
         ref={outputRef}
-        className="mt-6 grid flex-1 gap-6 md:grid-cols-2 xl:grid-cols-3"
+        className="mt-6 grid flex-1 gap-4 sm:gap-5 lg:gap-6 md:grid-cols-2 lg:grid-cols-3"
       >
         {/* Input */}
         <Glass>
