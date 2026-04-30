@@ -375,6 +375,10 @@ export const Route = createFileRoute("/api/convert")({
           );
         }
 
+        const TRANSLATION_MODES: Mode[] = ["hinglish", "hindi", "urdu", "english_meaning"];
+        const isTranslation = TRANSLATION_MODES.includes(parsed.mode);
+        const detectedLang: Lang = isTranslation ? "english" : detectLanguage(parsed.script);
+
         const system = STYLE_PROMPTS[parsed.mode];
 
         let lastErrorMsg = "AI service unavailable.";
@@ -395,6 +399,8 @@ export const Route = createFileRoute("/api/convert")({
                   "Cache-Control": "no-cache, no-transform",
                   Connection: "keep-alive",
                   "X-Provider": provider.name,
+                  "X-Lang": detectedLang,
+                  "Access-Control-Expose-Headers": "X-Lang, X-Provider",
                 },
               });
             }
