@@ -360,7 +360,7 @@ export function ScriptForgeWorkspace() {
           : 0;
 
   return (
-    <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1720px] flex-col px-4 py-6 sm:px-8 sm:py-10 lg:px-12">
+    <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1880px] flex-col px-3 py-5 sm:px-6 sm:py-8 md:px-8 lg:px-10 xl:px-12">
       {/* Header */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
