@@ -9,6 +9,9 @@ const MODES = [
   "shortfilm",
   "trailer",
   "hinglish",
+  "hindi",
+  "urdu",
+  "english_meaning",
 ] as const;
 type Mode = (typeof MODES)[number];
 
@@ -16,6 +19,43 @@ const Body = z.object({
   script: z.string().min(1).max(60000),
   mode: z.enum(MODES).default("standard"),
 });
+
+type Lang = "hinglish" | "hindi" | "urdu" | "english";
+
+/**
+ * Lightweight, deterministic input-language detector.
+ * - Devanagari range  → hindi
+ * - Arabic/Urdu range → urdu
+ * - Latin-only with strong Hindi-Roman markers → hinglish
+ * - Otherwise         → english
+ */
+function detectLanguage(text: string): Lang {
+  const sample = text.slice(0, 4000);
+  const devCount = (sample.match(/[\u0900-\u097F]/g) || []).length;
+  const arabicCount = (sample.match(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g) || []).length;
+  const latinLetters = (sample.match(/[A-Za-z]/g) || []).length;
+  const totalScript = devCount + arabicCount + latinLetters || 1;
+
+  if (arabicCount / totalScript > 0.2) return "urdu";
+  if (devCount / totalScript > 0.2) return "hindi";
+
+  if (latinLetters > 0) {
+    const lower = " " + sample.toLowerCase() + " ";
+    const hindiRomanMarkers = [
+      " hai ", " hain ", " kya ", " nahi ", " nahin ", " mein ", " mujhe ",
+      " tum ", " tumhe ", " aap ", " kar ", " karna ", " raha ", " rahi ",
+      " gaya ", " gayi ", " bhai ", " yaar ", " kyun ", " kyu ", " kaisa ",
+      " kaise ", " accha ", " acha ", " bhi ", " phir ", " toh ", " woh ",
+      " yeh ", " ye ", " ladka ", " ladki ", " ghar ", " baat ", " kuch ",
+      " sab ", " ek ", " ko ", " se ", " ki ", " ka ", " ke ", " ho ",
+    ];
+    let hits = 0;
+    for (const m of hindiRomanMarkers) if (lower.includes(m)) hits++;
+    if (hits >= 2) return "hinglish";
+  }
+  return "english";
+}
+
 
 const SHARED_RULES = `
 ROLE
@@ -167,6 +207,93 @@ OUTPUT
 - NO commentary, NO markdown, NO notes, NO "here is the translation".
 - The result must look STRUCTURALLY IDENTICAL to the input — only the language changes.
 `.trim(),
+
+  hindi: `MODE: HINDI MEANING TRANSLATION (PREMIUM, DEVANAGARI)
+
+You are a senior bilingual screenwriter. Translate the finished English screenplay
+into clean, natural, emotionally accurate HINDI in proper DEVANAGARI script.
+
+ABSOLUTE FAITHFULNESS
+- Translate EVERY scene heading, action line, character cue, dialogue, parenthetical,
+  and transition — in the SAME order. ONE-TO-ONE with the source.
+- Do NOT summarize, shorten, skip, or add lines. Preserve meaning, emotion, suspense,
+  drama, tone, pacing, intent, and subtext exactly.
+
+LANGUAGE
+- Use proper, readable Devanagari Hindi. Natural, modern, conversational.
+- Avoid heavy/archaic Sanskritized words unless the scene demands it.
+- Dialogue must sound like real people speaking modern Hindi.
+
+FORMAT — MIRROR THE ENGLISH SCRIPT EXACTLY
+- Keep universal screenplay terms in English: FADE IN:, FADE OUT., CUT TO:,
+  SMASH CUT TO:, DISSOLVE TO:, MATCH CUT TO:, TITLE CARD:, INT., EXT., V.O.,
+  O.S., CONT'D, NARRATOR.
+- Scene heading: "INT. <स्थान> - DAY/NIGHT" — translate the LOCATION to Hindi
+  (Devanagari), keep INT./EXT. and DAY/NIGHT/DAWN/DUSK in English.
+- Character cues stay in ALL CAPS English exactly as the source.
+- Action lines: present tense, Devanagari Hindi, same length and rhythm.
+- Dialogue: natural Hindi in Devanagari. Parentheticals: lowercase Hindi in parens.
+- Preserve all blank lines and block structure.
+
+OUTPUT
+- Output ONLY the translated screenplay text. No commentary, no markdown, no notes.
+`.trim(),
+
+  urdu: `MODE: URDU MEANING TRANSLATION (PREMIUM, NASTA'LIQ SCRIPT)
+
+You are a senior bilingual screenwriter. Translate the finished English screenplay
+into clean, natural, emotionally accurate URDU in proper Urdu script (Arabic-based,
+right-to-left).
+
+ABSOLUTE FAITHFULNESS
+- Translate EVERY scene heading, action line, character cue, dialogue, parenthetical,
+  and transition — in the SAME order. ONE-TO-ONE with the source.
+- Do NOT summarize, shorten, skip, or add lines. Preserve meaning, emotion, suspense,
+  drama, tone, pacing, intent, and subtext exactly.
+
+LANGUAGE
+- Use proper, elegant, readable Urdu. Natural and modern, the way real Urdu speakers
+  talk in films and dramas. Avoid heavy/archaic vocabulary unless the scene demands it.
+- Dialogue must sound like real human speech in Urdu.
+
+FORMAT — MIRROR THE ENGLISH SCRIPT EXACTLY
+- Keep universal screenplay terms in English (left-to-right): FADE IN:, FADE OUT.,
+  CUT TO:, SMASH CUT TO:, DISSOLVE TO:, MATCH CUT TO:, TITLE CARD:, INT., EXT.,
+  V.O., O.S., CONT'D, NARRATOR.
+- Scene heading: "INT. <مقام> - DAY/NIGHT" — translate the LOCATION to Urdu, keep
+  INT./EXT. and DAY/NIGHT/DAWN/DUSK in English.
+- Character cues stay in ALL CAPS English exactly as the source (so they remain
+  recognizable on a shoot).
+- Action lines and dialogue in Urdu script. Parentheticals: lowercase Urdu in parens.
+- Preserve all blank lines and block structure.
+
+OUTPUT
+- Output ONLY the translated screenplay text. No commentary, no markdown, no notes.
+`.trim(),
+
+  english_meaning: `MODE: ENGLISH PLAIN-MEANING VERSION
+
+You receive a finished, industry-formatted English screenplay. Produce a SIMPLIFIED,
+plain-English meaning version that mirrors the screenplay one-to-one.
+
+ABSOLUTE FAITHFULNESS
+- Mirror EVERY scene heading, action line, character cue, dialogue, parenthetical,
+  and transition — in the SAME order. ONE-TO-ONE with the source.
+- Do NOT summarize, shorten, skip, or add lines. Preserve meaning, emotion, tone,
+  pacing, intent, and subtext exactly.
+
+LANGUAGE
+- Use very simple, clear, modern English. Short sentences. No literary/flowery words.
+- Dialogue stays natural and human. Action stays visual and concrete.
+
+FORMAT
+- Identical screenplay format as the source. Keep FADE IN:, INT./EXT., DAY/NIGHT,
+  CUT TO:, character cues in ALL CAPS, etc., exactly as in the source.
+- Preserve all blank lines and block structure.
+
+OUTPUT
+- Output ONLY the simplified screenplay text. No commentary, no markdown, no notes.
+`.trim(),
 };
 
 type Provider = {
@@ -248,6 +375,10 @@ export const Route = createFileRoute("/api/convert")({
           );
         }
 
+        const TRANSLATION_MODES: Mode[] = ["hinglish", "hindi", "urdu", "english_meaning"];
+        const isTranslation = TRANSLATION_MODES.includes(parsed.mode);
+        const detectedLang: Lang = isTranslation ? "english" : detectLanguage(parsed.script);
+
         const system = STYLE_PROMPTS[parsed.mode];
 
         let lastErrorMsg = "AI service unavailable.";
@@ -268,6 +399,8 @@ export const Route = createFileRoute("/api/convert")({
                   "Cache-Control": "no-cache, no-transform",
                   Connection: "keep-alive",
                   "X-Provider": provider.name,
+                  "X-Lang": detectedLang,
+                  "Access-Control-Expose-Headers": "X-Lang, X-Provider",
                 },
               });
             }

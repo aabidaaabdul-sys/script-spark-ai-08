@@ -87,11 +87,21 @@ type Stage =
   | { kind: "done" }
   | { kind: "error"; message: string };
 
+type Lang = "hinglish" | "hindi" | "urdu" | "english";
+
+const LANG_META: Record<Lang, { label: string; mode: string; rtl: boolean; font?: string }> = {
+  hinglish: { label: "Hinglish Meaning", mode: "hinglish", rtl: false },
+  hindi: { label: "Hindi Meaning", mode: "hindi", rtl: false, font: '"Noto Sans Devanagari", "Mangal", system-ui, sans-serif' },
+  urdu: { label: "Urdu Meaning", mode: "urdu", rtl: true, font: '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Noto Naskh Arabic", serif' },
+  english: { label: "English Meaning", mode: "english_meaning", rtl: false },
+};
+
 export function ScriptForgeWorkspace() {
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
   const [hinglish, setHinglish] = useState("");
   const [hinglishBusy, setHinglishBusy] = useState(false);
+  const [detectedLang, setDetectedLang] = useState<Lang>("hinglish");
   const [mode, setMode] = useState<Mode>("standard");
   const [stage, setStage] = useState<Stage>({ kind: "idle" });
   const [copied, setCopied] = useState(false);
@@ -131,63 +141,66 @@ export function ScriptForgeWorkspace() {
   const outWords = useMemo(() => wordCount(output), [output]);
   const inChars = input.length;
 
-  const translateToHinglish = useCallback(async (englishScript: string) => {
-    if (!englishScript.trim()) return;
-    hinglishAbortRef.current?.abort();
-    const ctrl = new AbortController();
-    hinglishAbortRef.current = ctrl;
-    setHinglish("");
-    setHinglishBusy(true);
-    try {
-      const res = await fetch("/api/convert", {
-        method: "POST",
-        signal: ctrl.signal,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: englishScript, mode: "hinglish" }),
-      });
-      if (!res.ok || !res.body) {
-        setHinglishBusy(false);
-        return;
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let acc = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, nl);
-          buffer = buffer.slice(nl + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6).trim();
-          if (payload === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(payload);
-            const delta = parsed.choices?.[0]?.delta?.content as
-              | string
-              | undefined;
-            if (delta) {
-              acc += delta;
-              setHinglish(acc);
+  const translateToHinglish = useCallback(
+    async (englishScript: string, translationMode: string) => {
+      if (!englishScript.trim()) return;
+      hinglishAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      hinglishAbortRef.current = ctrl;
+      setHinglish("");
+      setHinglishBusy(true);
+      try {
+        const res = await fetch("/api/convert", {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script: englishScript, mode: translationMode }),
+        });
+        if (!res.ok || !res.body) {
+          setHinglishBusy(false);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let acc = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = parsed.choices?.[0]?.delta?.content as
+                | string
+                | undefined;
+              if (delta) {
+                acc += delta;
+                setHinglish(acc);
+              }
+            } catch {
+              buffer = line + "\n" + buffer;
+              break;
             }
-          } catch {
-            buffer = line + "\n" + buffer;
-            break;
           }
         }
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          console.error("translation error", err);
+        }
+      } finally {
+        setHinglishBusy(false);
       }
-    } catch (err: unknown) {
-      if ((err as { name?: string })?.name !== "AbortError") {
-        console.error("hinglish translate error", err);
-      }
-    } finally {
-      setHinglishBusy(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   const handleConvert = useCallback(async () => {
     if (!input.trim()) {
@@ -225,6 +238,13 @@ export function ScriptForgeWorkspace() {
         toast.error(msg);
         return;
       }
+
+      const headerLang = (res.headers.get("X-Lang") || "hinglish").toLowerCase();
+      const lang: Lang =
+        headerLang === "hindi" || headerLang === "urdu" || headerLang === "english"
+          ? (headerLang as Lang)
+          : "hinglish";
+      setDetectedLang(lang);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -264,9 +284,9 @@ export function ScriptForgeWorkspace() {
       toast.success(
         `Done in ${((Date.now() - startedAtRef.current) / 1000).toFixed(1)}s`,
       );
-      // Auto-generate Hinglish meaning version
+      // Auto-generate meaning version in the user's original input language
       if (acc.trim()) {
-        translateToHinglish(acc);
+        translateToHinglish(acc, LANG_META[lang].mode);
       }
     } catch (err: unknown) {
       if ((err as { name?: string })?.name === "AbortError") {
@@ -601,12 +621,20 @@ Example:
           )}
         </Glass>
 
-        {/* Hinglish Meaning */}
+        {/* Meaning Version (auto-language) */}
         <Glass>
           <PanelHeader
-            eyebrow="Box 3 · Hinglish Meaning"
-            title="Hinglish Meaning Version"
-            sub="Same screenplay · natural Roman Hindi · easy to understand"
+            eyebrow={`Box 3 · ${LANG_META[detectedLang].label}`}
+            title={`${LANG_META[detectedLang].label} Version`}
+            sub={
+              detectedLang === "urdu"
+                ? "Same screenplay · natural Urdu · right-to-left"
+                : detectedLang === "hindi"
+                  ? "Same screenplay · clean Devanagari Hindi · easy to read"
+                  : detectedLang === "english"
+                    ? "Same screenplay · simple plain English · easy to read"
+                    : "Same screenplay · natural Roman Hindi · easy to understand"
+            }
             right={
               <div className="flex items-center gap-2">
                 <span className="text-[11px] tabular-nums text-muted-foreground">
@@ -644,7 +672,26 @@ Example:
             }
           />
           {hinglish ? (
-            <pre className="h-[clamp(320px,55vh,760px)] overflow-auto whitespace-pre-wrap px-0 font-mono text-[13px] leading-[1.6] sm:text-[13.5px]">
+            <pre
+              dir={LANG_META[detectedLang].rtl ? "rtl" : "ltr"}
+              lang={
+                detectedLang === "hindi"
+                  ? "hi"
+                  : detectedLang === "urdu"
+                    ? "ur"
+                    : "en"
+              }
+              className={`h-[clamp(320px,55vh,760px)] overflow-auto whitespace-pre-wrap px-0 ${
+                detectedLang === "hindi" || detectedLang === "urdu"
+                  ? "text-[15px] leading-[1.85] sm:text-[16px]"
+                  : "font-mono text-[13px] leading-[1.6] sm:text-[13.5px]"
+              } ${LANG_META[detectedLang].rtl ? "text-right" : ""}`}
+              style={
+                LANG_META[detectedLang].font
+                  ? { fontFamily: LANG_META[detectedLang].font }
+                  : undefined
+              }
+            >
               {hinglish}
               {hinglishBusy && (
                 <span className="ml-0.5 inline-block h-4 w-1.5 -translate-y-0.5 animate-pulse bg-primary align-middle" />
@@ -662,11 +709,11 @@ Example:
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {hinglishBusy
-                    ? "Translating to natural Hinglish…"
-                    : "Hinglish meaning version will appear here automatically after the English script is generated."}
+                    ? `Translating to natural ${LANG_META[detectedLang].label.replace(" Meaning", "")}…`
+                    : "Meaning version will appear here automatically — in the same language you wrote your script."}
                 </p>
                 <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
-                  Same scenes · same dialogue · same emotion
+                  Auto-detects Hinglish · Hindi · Urdu · English
                 </p>
               </div>
             </div>
