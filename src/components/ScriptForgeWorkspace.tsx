@@ -141,63 +141,110 @@ export function ScriptForgeWorkspace() {
   const outWords = useMemo(() => wordCount(output), [output]);
   const inChars = input.length;
 
-  const translateToHinglish = useCallback(async (englishScript: string) => {
-    if (!englishScript.trim()) return;
+  const translateToHinglish = useCallback(
+    async (englishScript: string, translationMode: string) => {
+      if (!englishScript.trim()) return;
+      hinglishAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      hinglishAbortRef.current = ctrl;
+      setHinglish("");
+      setHinglishBusy(true);
+      try {
+        const res = await fetch("/api/convert", {
+          method: "POST",
+          signal: ctrl.signal,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script: englishScript, mode: translationMode }),
+        });
+        if (!res.ok || !res.body) {
+          setHinglishBusy(false);
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let acc = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let nl: number;
+          while ((nl = buffer.indexOf("\n")) !== -1) {
+            let line = buffer.slice(0, nl);
+            buffer = buffer.slice(nl + 1);
+            if (line.endsWith("\r")) line = line.slice(0, -1);
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(payload);
+              const delta = parsed.choices?.[0]?.delta?.content as
+                | string
+                | undefined;
+              if (delta) {
+                acc += delta;
+                setHinglish(acc);
+              }
+            } catch {
+              buffer = line + "\n" + buffer;
+              break;
+            }
+          }
+        }
+      } catch (err: unknown) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          console.error("translation error", err);
+        }
+      } finally {
+        setHinglishBusy(false);
+      }
+    },
+    [],
+  );
+
+  const handleConvert = useCallback(async () => {
+    if (!input.trim()) {
+      toast.error("Paste or type your rough script first.");
+      return;
+    }
+    abortRef.current?.abort();
     hinglishAbortRef.current?.abort();
     const ctrl = new AbortController();
-    hinglishAbortRef.current = ctrl;
+    abortRef.current = ctrl;
+    setOutput("");
     setHinglish("");
-    setHinglishBusy(true);
+    startedAtRef.current = Date.now();
+    setElapsed(0);
+    setStage({ kind: "thinking" });
+    // Smoothly bring output into view on small screens
+    setTimeout(() => {
+      outputRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+
     try {
       const res = await fetch("/api/convert", {
         method: "POST",
         signal: ctrl.signal,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: englishScript, mode: "hinglish" }),
+        body: JSON.stringify({ script: input, mode }),
       });
       if (!res.ok || !res.body) {
-        setHinglishBusy(false);
+        let msg = "Conversion failed.";
+        try {
+          const j = await res.json();
+          if (j?.error) msg = j.error;
+        } catch {}
+        setStage({ kind: "error", message: msg });
+        toast.error(msg);
         return;
       }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let acc = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buffer.indexOf("\n")) !== -1) {
-          let line = buffer.slice(0, nl);
-          buffer = buffer.slice(nl + 1);
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (!line.startsWith("data: ")) continue;
-          const payload = line.slice(6).trim();
-          if (payload === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(payload);
-            const delta = parsed.choices?.[0]?.delta?.content as
-              | string
-              | undefined;
-            if (delta) {
-              acc += delta;
-              setHinglish(acc);
-            }
-          } catch {
-            buffer = line + "\n" + buffer;
-            break;
-          }
-        }
-      }
-    } catch (err: unknown) {
-      if ((err as { name?: string })?.name !== "AbortError") {
-        console.error("hinglish translate error", err);
-      }
-    } finally {
-      setHinglishBusy(false);
-    }
-  }, []);
+
+      const headerLang = (res.headers.get("X-Lang") || "hinglish").toLowerCase();
+      const lang: Lang =
+        headerLang === "hindi" || headerLang === "urdu" || headerLang === "english"
+          ? (headerLang as Lang)
+          : "hinglish";
+      setDetectedLang(lang);
 
   const handleConvert = useCallback(async () => {
     if (!input.trim()) {
