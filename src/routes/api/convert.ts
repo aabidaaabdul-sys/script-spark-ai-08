@@ -9,6 +9,9 @@ const MODES = [
   "shortfilm",
   "trailer",
   "hinglish",
+  "hindi",
+  "urdu",
+  "english_meaning",
 ] as const;
 type Mode = (typeof MODES)[number];
 
@@ -16,6 +19,43 @@ const Body = z.object({
   script: z.string().min(1).max(60000),
   mode: z.enum(MODES).default("standard"),
 });
+
+type Lang = "hinglish" | "hindi" | "urdu" | "english";
+
+/**
+ * Lightweight, deterministic input-language detector.
+ * - Devanagari range  → hindi
+ * - Arabic/Urdu range → urdu
+ * - Latin-only with strong Hindi-Roman markers → hinglish
+ * - Otherwise         → english
+ */
+function detectLanguage(text: string): Lang {
+  const sample = text.slice(0, 4000);
+  const devCount = (sample.match(/[\u0900-\u097F]/g) || []).length;
+  const arabicCount = (sample.match(/[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/g) || []).length;
+  const latinLetters = (sample.match(/[A-Za-z]/g) || []).length;
+  const totalScript = devCount + arabicCount + latinLetters || 1;
+
+  if (arabicCount / totalScript > 0.2) return "urdu";
+  if (devCount / totalScript > 0.2) return "hindi";
+
+  if (latinLetters > 0) {
+    const lower = " " + sample.toLowerCase() + " ";
+    const hindiRomanMarkers = [
+      " hai ", " hain ", " kya ", " nahi ", " nahin ", " mein ", " mujhe ",
+      " tum ", " tumhe ", " aap ", " kar ", " karna ", " raha ", " rahi ",
+      " gaya ", " gayi ", " bhai ", " yaar ", " kyun ", " kyu ", " kaisa ",
+      " kaise ", " accha ", " acha ", " bhi ", " phir ", " toh ", " woh ",
+      " yeh ", " ye ", " ladka ", " ladki ", " ghar ", " baat ", " kuch ",
+      " sab ", " ek ", " ko ", " se ", " ki ", " ka ", " ke ", " ho ",
+    ];
+    let hits = 0;
+    for (const m of hindiRomanMarkers) if (lower.includes(m)) hits++;
+    if (hits >= 2) return "hinglish";
+  }
+  return "english";
+}
+
 
 const SHARED_RULES = `
 ROLE
