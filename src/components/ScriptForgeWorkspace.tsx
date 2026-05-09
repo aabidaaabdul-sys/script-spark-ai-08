@@ -18,8 +18,11 @@ import {
   BookOpen,
   Feather,
   Type,
+  Bot,
+  Undo2,
 } from "lucide-react";
 import { ExportPanel } from "@/components/ExportPanel";
+import { CoWriterChat } from "@/components/CoWriterChat";
 
 const STORAGE_KEY = "scriptforge.input.v2";
 const MODE_KEY = "scriptforge.mode.v2";
@@ -112,6 +115,8 @@ export function ScriptForgeWorkspace() {
   const startedAtRef = useRef(0);
   const outputRef = useRef<HTMLDivElement | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
 
   // Restore draft + mode
   useEffect(() => {
@@ -216,6 +221,35 @@ export function ScriptForgeWorkspace() {
     [],
   );
 
+  const handleCoWriterUpdate = useCallback(
+    (next: string) => {
+      setOutput((prev) => {
+        if (prev) {
+          setHistory((h) => {
+            const arr = [...h, prev];
+            return arr.length > 20 ? arr.slice(arr.length - 20) : arr;
+          });
+        }
+        return next;
+      });
+      if (next.trim()) translateToHinglish(next, LANG_META[detectedLang].mode);
+      else setHinglish("");
+    },
+    [detectedLang, translateToHinglish],
+  );
+
+  const handleUndo = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setOutput(prev);
+      if (prev.trim()) translateToHinglish(prev, LANG_META[detectedLang].mode);
+      else setHinglish("");
+      toast.success("Reverted to previous version");
+      return h.slice(0, -1);
+    });
+  }, [detectedLang, translateToHinglish]);
+
   const handleConvert = useCallback(async () => {
     if (!input.trim()) {
       toast.error("Paste or type your rough script first.");
@@ -227,6 +261,7 @@ export function ScriptForgeWorkspace() {
     abortRef.current = ctrl;
     setOutput("");
     setHinglish("");
+    setHistory([]);
     startedAtRef.current = Date.now();
     setElapsed(0);
     setStage({ kind: "thinking" });
@@ -426,9 +461,25 @@ export function ScriptForgeWorkspace() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
-          Streaming AI · Meaning-locked
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setChatOpen(true)}
+            size="sm"
+            variant="outline"
+            className="group relative gap-2 border-primary/40 bg-primary/5 text-foreground hover:border-primary/70 hover:bg-primary/10"
+          >
+            <Bot className="h-4 w-4 text-primary" />
+            <span className="font-medium">AI Co-Writer</span>
+            {history.length > 0 && (
+              <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
+                {history.length}
+              </span>
+            )}
+          </Button>
+          <div className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:flex">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
+            Streaming AI · Meaning-locked
+          </div>
         </div>
       </header>
 
@@ -770,6 +821,47 @@ Example:
           <span>Zero login</span>
         </span>
       </footer>
+
+      {/* Floating Co-Writer trigger (mobile + desktop) */}
+      {!chatOpen && (
+        <button
+          type="button"
+          onClick={() => setChatOpen(true)}
+          className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-primary/40 bg-gradient-primary px-4 py-3 text-primary-foreground shadow-glow transition-all hover:scale-[1.03] hover:shadow-elevated"
+          aria-label="Open AI Co-Writer"
+        >
+          <Bot className="h-5 w-5" />
+          <span className="hidden text-sm font-medium sm:inline">Co-Writer</span>
+        </button>
+      )}
+
+      {/* Floating Undo when there are revisions */}
+      {history.length > 0 && !chatOpen && (
+        <button
+          type="button"
+          onClick={handleUndo}
+          className="fixed bottom-5 right-[calc(1.25rem+3.5rem)] z-40 flex items-center gap-1.5 rounded-full border border-border/60 bg-card/90 px-3 py-2.5 text-xs text-foreground shadow-elevated backdrop-blur-md transition-all hover:border-primary/60 sm:right-[calc(1.25rem+9rem)]"
+          aria-label="Undo last script change"
+        >
+          <Undo2 className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Undo</span>
+          <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
+            {history.length}
+          </span>
+        </button>
+      )}
+
+      <CoWriterChat
+        open={chatOpen}
+        onOpenChange={setChatOpen}
+        script={output}
+        mode={mode}
+        lang={detectedLang}
+        modeLabel={MODES.find((m) => m.id === mode)?.label || mode}
+        onScriptUpdate={handleCoWriterUpdate}
+        canUndo={history.length > 0}
+        onUndo={handleUndo}
+      />
     </div>
   );
 }

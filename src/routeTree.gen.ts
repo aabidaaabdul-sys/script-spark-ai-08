@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiCowriterRouteImport } from './routes/api/cowriter'
 import { Route as ApiConvertRouteImport } from './routes/api/convert'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCowriterRoute = ApiCowriterRouteImport.update({
+  id: '/api/cowriter',
+  path: '/api/cowriter',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiConvertRoute = ApiConvertRouteImport.update({
@@ -26,27 +32,31 @@ const ApiConvertRoute = ApiConvertRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
+  '/api/cowriter': typeof ApiCowriterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
+  '/api/cowriter': typeof ApiCowriterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
+  '/api/cowriter': typeof ApiCowriterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/convert'
+  fullPaths: '/' | '/api/convert' | '/api/cowriter'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/convert'
-  id: '__root__' | '/' | '/api/convert'
+  to: '/' | '/api/convert' | '/api/cowriter'
+  id: '__root__' | '/' | '/api/convert' | '/api/cowriter'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiConvertRoute: typeof ApiConvertRoute
+  ApiCowriterRoute: typeof ApiCowriterRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cowriter': {
+      id: '/api/cowriter'
+      path: '/api/cowriter'
+      fullPath: '/api/cowriter'
+      preLoaderRoute: typeof ApiCowriterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/convert': {
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiConvertRoute: ApiConvertRoute,
+  ApiCowriterRoute: ApiCowriterRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
