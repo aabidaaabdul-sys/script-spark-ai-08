@@ -356,12 +356,117 @@ async function callStream(
   });
 }
 
-export const Route = createFileRoute("/api/convert")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
-        const providers = getProviders();
-        if (providers.length === 0) {
+/**
+ * Split very large scripts into smart chunks at natural boundaries
+ * (scene headings, transitions, paragraph breaks). Preserves order.
+ */
+function smartChunk(text: string, target = CHUNK_TARGET): string[] {
+  if (text.length <= CHUNK_THRESHOLD) return [text];
+  const chunks: string[] = [];
+  // Prefer splitting on screenplay scene boundaries first.
+  const sceneRegex = /(?=^\s*(?:INT\.|EXT\.|FADE IN:|FADE OUT\.|CUT TO:|SMASH CUT TO:|DISSOLVE TO:|MATCH CUT TO:|TITLE CARD:))/gm;
+  const sceneBlocks = text.split(sceneRegex).filter((b) => b.trim().length > 0);
+  const blocks = sceneBlocks.length > 1 ? sceneBlocks : text.split(/\n{2,}/);
+
+  let buf = "";
+  const flush = () => {
+    if (buf.trim()) chunks.push(buf);
+    buf = "";
+  };
+  for (const block of blocks) {
+    if (block.length > target * 1.6) {
+      // Oversized block: hard-split by sentences.
+      flush();
+      const sentences = block.split(/(?<=[.!?…])\s+/);
+      for (const s of sentences) {
+        if (buf.length + s.length + 1 > target && buf.length > 0) flush();
+        buf += (buf ? " " : "") + s;
+      }
+      flush();
+      continue;
+    }
+    if (buf.length + block.length + 2 > target && buf.length > 0) flush();
+    buf += (buf ? "\n\n" : "") + block;
+  }
+  flush();
+  return chunks;
+}
+
+function emitSSE(controller: ReadableStreamDefaultController, encoder: TextEncoder, content: string) {
+  const payload = JSON.stringify({ choices: [{ delta: { content } }] });
+  controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+}
+
+async function pipeUpstreamToClient(
+  upstream: Response,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+): Promise<string> {
+  if (!upstream.body) return "";
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let acc = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) !== -1) {
+      let line = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 1);
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(payload);
+        const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (delta) {
+          acc += delta;
+          // Re-emit as a clean SSE event downstream.
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`));
+        }
+      } catch {
+        buffer = line + "\n" + buffer;
+        break;
+      }
+    }
+  }
+  return acc;
+}
+
+function buildChunkUserPrompt(opts: {
+  fullChunk: string;
+  index: number;
+  total: number;
+  priorTail: string;
+  isTranslation: boolean;
+}): string {
+  const { fullChunk, index, total, priorTail, isTranslation } = opts;
+  if (total === 1) return fullChunk;
+
+  const header = isTranslation
+    ? `LARGE-SCRIPT TRANSLATION — PART ${index + 1} of ${total}.
+You are translating a long screenplay in sequential parts. Maintain identical
+character names, tone, formatting, and screenplay structure across parts.
+Translate ONLY the "CURRENT PART" below, line-by-line, in the SAME order.
+Do NOT repeat earlier content. Do NOT add a preface, header, or summary.
+Do NOT add "Part X" labels. Output ONLY the translated screenplay text for this part.`
+    : `LARGE-SCRIPT REWRITE — PART ${index + 1} of ${total}.
+You are rewriting a long screenplay in sequential parts. Maintain consistent
+characters, tone, world, and screenplay format across parts. Rewrite ONLY the
+"CURRENT PART" below into industry-standard screenplay format. Do NOT repeat
+earlier content. Do NOT add a preface, summary, or "Part X" label.
+Do NOT write FADE IN: again unless this is part 1. Do NOT write FADE OUT.
+unless this is the final part. Output ONLY the screenplay text for this part.`;
+
+  const continuity = priorTail
+    ? `\n\nPREVIOUS PART — TAIL (for continuity only, DO NOT repeat or rewrite):\n"""\n${priorTail}\n"""`
+    : "";
+
+  return `${header}${continuity}\n\nCURRENT PART (rewrite/translate this part only):\n"""\n${fullChunk}\n"""`;
+}
           return new Response(
             JSON.stringify({
               error:
