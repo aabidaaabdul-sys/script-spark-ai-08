@@ -467,10 +467,48 @@ unless this is the final part. Output ONLY the screenplay text for this part.`;
 
   return `${header}${continuity}\n\nCURRENT PART (rewrite/translate this part only):\n"""\n${fullChunk}\n"""`;
 }
+
+const TRANSLATION_MODES: Mode[] = ["hinglish", "hindi", "urdu", "english_meaning"];
+
+async function tryProvidersStream(opts: {
+  providers: Provider[];
+  system: string;
+  user: string;
+  signal: AbortSignal;
+}): Promise<{ upstream: Response; provider: Provider } | { errorMsg: string }> {
+  let lastErrorMsg = "AI service unavailable.";
+  for (const provider of opts.providers) {
+    try {
+      const upstream = await callStream(provider, opts.system, opts.user, opts.signal);
+      if (upstream.ok && upstream.body) return { upstream, provider };
+      const errText = await upstream.text().catch(() => "");
+      console.error(`[convert] ${provider.name} ${upstream.status}: ${errText.slice(0, 400)}`);
+      if (upstream.status === 401 || upstream.status === 403)
+        lastErrorMsg = `${provider.name} API key is invalid or unauthorized.`;
+      else if (upstream.status === 429)
+        lastErrorMsg = "Rate limit reached. Please wait a moment and retry.";
+      else if (upstream.status === 402)
+        lastErrorMsg = "AI credits exhausted. Please add credits in Workspace Settings → Usage.";
+      else if (upstream.status >= 500)
+        lastErrorMsg = `${provider.name} server error (${upstream.status}). Trying fallback…`;
+      else lastErrorMsg = `${provider.name} error (${upstream.status}).`;
+    } catch (e) {
+      console.error(`[convert] ${provider.name} threw:`, e);
+      lastErrorMsg = `${provider.name} request failed. Trying fallback…`;
+    }
+  }
+  return { errorMsg: lastErrorMsg };
+}
+
+export const Route = createFileRoute("/api/convert")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const providers = getProviders();
+        if (providers.length === 0) {
           return new Response(
             JSON.stringify({
-              error:
-                "AI is not configured. Please add LOVABLE_API_KEY or OPENAI_API_KEY.",
+              error: "AI is not configured. Please add LOVABLE_API_KEY or OPENAI_API_KEY.",
             }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
@@ -486,63 +524,94 @@ unless this is the final part. Output ONLY the screenplay text for this part.`;
           );
         }
 
-        const TRANSLATION_MODES: Mode[] = ["hinglish", "hindi", "urdu", "english_meaning"];
         const isTranslation = TRANSLATION_MODES.includes(parsed.mode);
         const detectedLang: Lang = isTranslation ? "english" : detectLanguage(parsed.script);
-
         const system = STYLE_PROMPTS[parsed.mode];
 
-        let lastErrorMsg = "AI service unavailable.";
-        for (const provider of providers) {
-          try {
-            const upstream = await callStream(
-              provider,
-              system,
-              parsed.script,
-              request.signal,
-            );
-
-            if (upstream.ok && upstream.body) {
-              return new Response(upstream.body, {
-                status: 200,
-                headers: {
-                  "Content-Type": "text/event-stream; charset=utf-8",
-                  "Cache-Control": "no-cache, no-transform",
-                  Connection: "keep-alive",
-                  "X-Provider": provider.name,
-                  "X-Lang": detectedLang,
-                  "Access-Control-Expose-Headers": "X-Lang, X-Provider",
-                },
-              });
-            }
-
-            const errText = await upstream.text().catch(() => "");
-            console.error(
-              `[convert] ${provider.name} ${upstream.status}: ${errText.slice(0, 500)}`,
-            );
-
-            if (upstream.status === 401 || upstream.status === 403) {
-              lastErrorMsg = `${provider.name} API key is invalid or unauthorized.`;
-            } else if (upstream.status === 429) {
-              lastErrorMsg = "Rate limit reached. Please wait a moment and retry.";
-            } else if (upstream.status === 402) {
-              lastErrorMsg =
-                "AI credits exhausted. Please add credits in Workspace Settings → Usage.";
-            } else if (upstream.status >= 500) {
-              lastErrorMsg = `${provider.name} server error (${upstream.status}). Trying fallback…`;
-            } else {
-              lastErrorMsg = `${provider.name} error (${upstream.status}).`;
-            }
-            // try next provider
-          } catch (e) {
-            console.error(`[convert] ${provider.name} threw:`, e);
-            lastErrorMsg = `${provider.name} request failed. Trying fallback…`;
+        // FAST PATH — small/medium scripts: passthrough stream as before.
+        if (parsed.script.length <= CHUNK_THRESHOLD) {
+          const result = await tryProvidersStream({
+            providers,
+            system,
+            user: parsed.script,
+            signal: request.signal,
+          });
+          if ("errorMsg" in result) {
+            return new Response(JSON.stringify({ error: result.errorMsg }), {
+              status: 502,
+              headers: { "Content-Type": "application/json" },
+            });
           }
+          return new Response(result.upstream.body, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream; charset=utf-8",
+              "Cache-Control": "no-cache, no-transform",
+              Connection: "keep-alive",
+              "X-Provider": result.provider.name,
+              "X-Lang": detectedLang,
+              "X-Chunks": "1",
+              "Access-Control-Expose-Headers": "X-Lang, X-Provider, X-Chunks",
+            },
+          });
         }
 
-        return new Response(JSON.stringify({ error: lastErrorMsg }), {
-          status: 502,
-          headers: { "Content-Type": "application/json" },
+        // LARGE PATH — chunked sequential generation, streamed to client.
+        const chunks = smartChunk(parsed.script);
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(controller) {
+            try {
+              let priorTail = "";
+              for (let i = 0; i < chunks.length; i++) {
+                if (request.signal.aborted) break;
+                const userPrompt = buildChunkUserPrompt({
+                  fullChunk: chunks[i],
+                  index: i,
+                  total: chunks.length,
+                  priorTail,
+                  isTranslation,
+                });
+                const result = await tryProvidersStream({
+                  providers,
+                  system,
+                  user: userPrompt,
+                  signal: request.signal,
+                });
+                if ("errorMsg" in result) {
+                  emitSSE(controller, encoder, `\n\n[Generation interrupted at part ${i + 1}/${chunks.length}: ${result.errorMsg}]\n`);
+                  break;
+                }
+                if (i > 0) emitSSE(controller, encoder, "\n\n");
+                const partText = await pipeUpstreamToClient(result.upstream, controller, encoder);
+                priorTail = partText.slice(-CHUNK_OVERLAP_TAIL);
+              }
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            } catch (e) {
+              console.error("[convert] chunked stream failed:", e);
+              try {
+                emitSSE(controller, encoder, "\n\n[Generation error. Please retry.]");
+              } catch {}
+            } finally {
+              try { controller.close(); } catch {}
+            }
+          },
+          cancel() {
+            // Client disconnected; nothing else to clean up.
+          },
+        });
+
+        return new Response(stream, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+            "X-Provider": providers[0].name,
+            "X-Lang": detectedLang,
+            "X-Chunks": String(chunks.length),
+            "Access-Control-Expose-Headers": "X-Lang, X-Provider, X-Chunks",
+          },
         });
       },
     },
