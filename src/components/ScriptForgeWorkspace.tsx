@@ -461,9 +461,25 @@ export function ScriptForgeWorkspace() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
-          Streaming AI · Meaning-locked
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => setChatOpen(true)}
+            size="sm"
+            variant="outline"
+            className="group relative gap-2 border-primary/40 bg-primary/5 text-foreground hover:border-primary/70 hover:bg-primary/10"
+          >
+            <Bot className="h-4 w-4 text-primary" />
+            <span className="font-medium">AI Co-Writer</span>
+            {history.length > 0 && (
+              <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
+                {history.length}
+              </span>
+            )}
+          </Button>
+          <div className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:flex">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
+            Streaming AI · Meaning-locked
+          </div>
         </div>
       </header>
 
