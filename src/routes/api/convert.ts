@@ -16,9 +16,15 @@ const MODES = [
 type Mode = (typeof MODES)[number];
 
 const Body = z.object({
-  script: z.string().min(1).max(60000),
+  // Allow extremely large scripts (~2M chars ≈ ~300k+ words). Internally chunked.
+  script: z.string().min(1).max(2_000_000),
   mode: z.enum(MODES).default("standard"),
 });
+
+// Soft threshold: anything bigger is processed in smart chunks with shared context.
+const CHUNK_THRESHOLD = 18_000; // characters
+const CHUNK_TARGET = 12_000;    // target size per chunk
+const CHUNK_OVERLAP_TAIL = 1_400; // chars of prior chunk tail re-fed for continuity
 
 type Lang = "hinglish" | "hindi" | "urdu" | "english";
 
