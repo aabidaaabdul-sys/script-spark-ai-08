@@ -115,6 +115,8 @@ export function ScriptForgeWorkspace() {
   const startedAtRef = useRef(0);
   const outputRef = useRef<HTMLDivElement | null>(null);
   const [elapsed, setElapsed] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
 
   // Restore draft + mode
   useEffect(() => {
