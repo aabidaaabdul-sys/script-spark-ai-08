@@ -18,8 +18,11 @@ import {
   BookOpen,
   Feather,
   Type,
+  Bot,
+  Undo2,
 } from "lucide-react";
 import { ExportPanel } from "@/components/ExportPanel";
+import { CoWriterChat } from "@/components/CoWriterChat";
 
 const STORAGE_KEY = "scriptforge.input.v2";
 const MODE_KEY = "scriptforge.mode.v2";
