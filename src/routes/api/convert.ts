@@ -16,9 +16,15 @@ const MODES = [
 type Mode = (typeof MODES)[number];
 
 const Body = z.object({
-  script: z.string().min(1).max(60000),
+  // Allow extremely large scripts (~2M chars ≈ ~300k+ words). Internally chunked.
+  script: z.string().min(1).max(2_000_000),
   mode: z.enum(MODES).default("standard"),
 });
+
+// Soft threshold: anything bigger is processed in smart chunks with shared context.
+const CHUNK_THRESHOLD = 18_000; // characters
+const CHUNK_TARGET = 12_000;    // target size per chunk
+const CHUNK_OVERLAP_TAIL = 1_400; // chars of prior chunk tail re-fed for continuity
 
 type Lang = "hinglish" | "hindi" | "urdu" | "english";
 
@@ -350,6 +356,150 @@ async function callStream(
   });
 }
 
+/**
+ * Split very large scripts into smart chunks at natural boundaries
+ * (scene headings, transitions, paragraph breaks). Preserves order.
+ */
+function smartChunk(text: string, target = CHUNK_TARGET): string[] {
+  if (text.length <= CHUNK_THRESHOLD) return [text];
+  const chunks: string[] = [];
+  // Prefer splitting on screenplay scene boundaries first.
+  const sceneRegex = /(?=^\s*(?:INT\.|EXT\.|FADE IN:|FADE OUT\.|CUT TO:|SMASH CUT TO:|DISSOLVE TO:|MATCH CUT TO:|TITLE CARD:))/gm;
+  const sceneBlocks = text.split(sceneRegex).filter((b) => b.trim().length > 0);
+  const blocks = sceneBlocks.length > 1 ? sceneBlocks : text.split(/\n{2,}/);
+
+  let buf = "";
+  const flush = () => {
+    if (buf.trim()) chunks.push(buf);
+    buf = "";
+  };
+  for (const block of blocks) {
+    if (block.length > target * 1.6) {
+      // Oversized block: hard-split by sentences.
+      flush();
+      const sentences = block.split(/(?<=[.!?…])\s+/);
+      for (const s of sentences) {
+        if (buf.length + s.length + 1 > target && buf.length > 0) flush();
+        buf += (buf ? " " : "") + s;
+      }
+      flush();
+      continue;
+    }
+    if (buf.length + block.length + 2 > target && buf.length > 0) flush();
+    buf += (buf ? "\n\n" : "") + block;
+  }
+  flush();
+  return chunks;
+}
+
+function emitSSE(controller: ReadableStreamDefaultController, encoder: TextEncoder, content: string) {
+  const payload = JSON.stringify({ choices: [{ delta: { content } }] });
+  controller.enqueue(encoder.encode(`data: ${payload}\n\n`));
+}
+
+async function pipeUpstreamToClient(
+  upstream: Response,
+  controller: ReadableStreamDefaultController,
+  encoder: TextEncoder,
+): Promise<string> {
+  if (!upstream.body) return "";
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let acc = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buffer.indexOf("\n")) !== -1) {
+      let line = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 1);
+      if (line.endsWith("\r")) line = line.slice(0, -1);
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (payload === "[DONE]") continue;
+      try {
+        const parsed = JSON.parse(payload);
+        const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+        if (delta) {
+          acc += delta;
+          // Re-emit as a clean SSE event downstream.
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content: delta } }] })}\n\n`));
+        }
+      } catch {
+        buffer = line + "\n" + buffer;
+        break;
+      }
+    }
+  }
+  return acc;
+}
+
+function buildChunkUserPrompt(opts: {
+  fullChunk: string;
+  index: number;
+  total: number;
+  priorTail: string;
+  isTranslation: boolean;
+}): string {
+  const { fullChunk, index, total, priorTail, isTranslation } = opts;
+  if (total === 1) return fullChunk;
+
+  const header = isTranslation
+    ? `LARGE-SCRIPT TRANSLATION — PART ${index + 1} of ${total}.
+You are translating a long screenplay in sequential parts. Maintain identical
+character names, tone, formatting, and screenplay structure across parts.
+Translate ONLY the "CURRENT PART" below, line-by-line, in the SAME order.
+Do NOT repeat earlier content. Do NOT add a preface, header, or summary.
+Do NOT add "Part X" labels. Output ONLY the translated screenplay text for this part.`
+    : `LARGE-SCRIPT REWRITE — PART ${index + 1} of ${total}.
+You are rewriting a long screenplay in sequential parts. Maintain consistent
+characters, tone, world, and screenplay format across parts. Rewrite ONLY the
+"CURRENT PART" below into industry-standard screenplay format. Do NOT repeat
+earlier content. Do NOT add a preface, summary, or "Part X" label.
+Do NOT write FADE IN: again unless this is part 1. Do NOT write FADE OUT.
+unless this is the final part. Output ONLY the screenplay text for this part.`;
+
+  const continuity = priorTail
+    ? `\n\nPREVIOUS PART — TAIL (for continuity only, DO NOT repeat or rewrite):\n"""\n${priorTail}\n"""`
+    : "";
+
+  return `${header}${continuity}\n\nCURRENT PART (rewrite/translate this part only):\n"""\n${fullChunk}\n"""`;
+}
+
+const TRANSLATION_MODES: Mode[] = ["hinglish", "hindi", "urdu", "english_meaning"];
+
+async function tryProvidersStream(opts: {
+  providers: Provider[];
+  system: string;
+  user: string;
+  signal: AbortSignal;
+}): Promise<{ upstream: Response; provider: Provider } | { errorMsg: string }> {
+  let lastErrorMsg = "AI service unavailable.";
+  for (const provider of opts.providers) {
+    try {
+      const upstream = await callStream(provider, opts.system, opts.user, opts.signal);
+      if (upstream.ok && upstream.body) return { upstream, provider };
+      const errText = await upstream.text().catch(() => "");
+      console.error(`[convert] ${provider.name} ${upstream.status}: ${errText.slice(0, 400)}`);
+      if (upstream.status === 401 || upstream.status === 403)
+        lastErrorMsg = `${provider.name} API key is invalid or unauthorized.`;
+      else if (upstream.status === 429)
+        lastErrorMsg = "Rate limit reached. Please wait a moment and retry.";
+      else if (upstream.status === 402)
+        lastErrorMsg = "AI credits exhausted. Please add credits in Workspace Settings → Usage.";
+      else if (upstream.status >= 500)
+        lastErrorMsg = `${provider.name} server error (${upstream.status}). Trying fallback…`;
+      else lastErrorMsg = `${provider.name} error (${upstream.status}).`;
+    } catch (e) {
+      console.error(`[convert] ${provider.name} threw:`, e);
+      lastErrorMsg = `${provider.name} request failed. Trying fallback…`;
+    }
+  }
+  return { errorMsg: lastErrorMsg };
+}
+
 export const Route = createFileRoute("/api/convert")({
   server: {
     handlers: {
@@ -358,8 +508,7 @@ export const Route = createFileRoute("/api/convert")({
         if (providers.length === 0) {
           return new Response(
             JSON.stringify({
-              error:
-                "AI is not configured. Please add LOVABLE_API_KEY or OPENAI_API_KEY.",
+              error: "AI is not configured. Please add LOVABLE_API_KEY or OPENAI_API_KEY.",
             }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
@@ -375,63 +524,94 @@ export const Route = createFileRoute("/api/convert")({
           );
         }
 
-        const TRANSLATION_MODES: Mode[] = ["hinglish", "hindi", "urdu", "english_meaning"];
         const isTranslation = TRANSLATION_MODES.includes(parsed.mode);
         const detectedLang: Lang = isTranslation ? "english" : detectLanguage(parsed.script);
-
         const system = STYLE_PROMPTS[parsed.mode];
 
-        let lastErrorMsg = "AI service unavailable.";
-        for (const provider of providers) {
-          try {
-            const upstream = await callStream(
-              provider,
-              system,
-              parsed.script,
-              request.signal,
-            );
-
-            if (upstream.ok && upstream.body) {
-              return new Response(upstream.body, {
-                status: 200,
-                headers: {
-                  "Content-Type": "text/event-stream; charset=utf-8",
-                  "Cache-Control": "no-cache, no-transform",
-                  Connection: "keep-alive",
-                  "X-Provider": provider.name,
-                  "X-Lang": detectedLang,
-                  "Access-Control-Expose-Headers": "X-Lang, X-Provider",
-                },
-              });
-            }
-
-            const errText = await upstream.text().catch(() => "");
-            console.error(
-              `[convert] ${provider.name} ${upstream.status}: ${errText.slice(0, 500)}`,
-            );
-
-            if (upstream.status === 401 || upstream.status === 403) {
-              lastErrorMsg = `${provider.name} API key is invalid or unauthorized.`;
-            } else if (upstream.status === 429) {
-              lastErrorMsg = "Rate limit reached. Please wait a moment and retry.";
-            } else if (upstream.status === 402) {
-              lastErrorMsg =
-                "AI credits exhausted. Please add credits in Workspace Settings → Usage.";
-            } else if (upstream.status >= 500) {
-              lastErrorMsg = `${provider.name} server error (${upstream.status}). Trying fallback…`;
-            } else {
-              lastErrorMsg = `${provider.name} error (${upstream.status}).`;
-            }
-            // try next provider
-          } catch (e) {
-            console.error(`[convert] ${provider.name} threw:`, e);
-            lastErrorMsg = `${provider.name} request failed. Trying fallback…`;
+        // FAST PATH — small/medium scripts: passthrough stream as before.
+        if (parsed.script.length <= CHUNK_THRESHOLD) {
+          const result = await tryProvidersStream({
+            providers,
+            system,
+            user: parsed.script,
+            signal: request.signal,
+          });
+          if ("errorMsg" in result) {
+            return new Response(JSON.stringify({ error: result.errorMsg }), {
+              status: 502,
+              headers: { "Content-Type": "application/json" },
+            });
           }
+          return new Response(result.upstream.body, {
+            status: 200,
+            headers: {
+              "Content-Type": "text/event-stream; charset=utf-8",
+              "Cache-Control": "no-cache, no-transform",
+              Connection: "keep-alive",
+              "X-Provider": result.provider.name,
+              "X-Lang": detectedLang,
+              "X-Chunks": "1",
+              "Access-Control-Expose-Headers": "X-Lang, X-Provider, X-Chunks",
+            },
+          });
         }
 
-        return new Response(JSON.stringify({ error: lastErrorMsg }), {
-          status: 502,
-          headers: { "Content-Type": "application/json" },
+        // LARGE PATH — chunked sequential generation, streamed to client.
+        const chunks = smartChunk(parsed.script);
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          async start(controller) {
+            try {
+              let priorTail = "";
+              for (let i = 0; i < chunks.length; i++) {
+                if (request.signal.aborted) break;
+                const userPrompt = buildChunkUserPrompt({
+                  fullChunk: chunks[i],
+                  index: i,
+                  total: chunks.length,
+                  priorTail,
+                  isTranslation,
+                });
+                const result = await tryProvidersStream({
+                  providers,
+                  system,
+                  user: userPrompt,
+                  signal: request.signal,
+                });
+                if ("errorMsg" in result) {
+                  emitSSE(controller, encoder, `\n\n[Generation interrupted at part ${i + 1}/${chunks.length}: ${result.errorMsg}]\n`);
+                  break;
+                }
+                if (i > 0) emitSSE(controller, encoder, "\n\n");
+                const partText = await pipeUpstreamToClient(result.upstream, controller, encoder);
+                priorTail = partText.slice(-CHUNK_OVERLAP_TAIL);
+              }
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+            } catch (e) {
+              console.error("[convert] chunked stream failed:", e);
+              try {
+                emitSSE(controller, encoder, "\n\n[Generation error. Please retry.]");
+              } catch {}
+            } finally {
+              try { controller.close(); } catch {}
+            }
+          },
+          cancel() {
+            // Client disconnected; nothing else to clean up.
+          },
+        });
+
+        return new Response(stream, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+            "X-Provider": providers[0].name,
+            "X-Lang": detectedLang,
+            "X-Chunks": String(chunks.length),
+            "Access-Control-Expose-Headers": "X-Lang, X-Provider, X-Chunks",
+          },
         });
       },
     },
