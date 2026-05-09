@@ -261,6 +261,7 @@ export function ScriptForgeWorkspace() {
     abortRef.current = ctrl;
     setOutput("");
     setHinglish("");
+    setHistory([]);
     startedAtRef.current = Date.now();
     setElapsed(0);
     setStage({ kind: "thinking" });
