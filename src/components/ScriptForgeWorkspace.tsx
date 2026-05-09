@@ -221,6 +221,35 @@ export function ScriptForgeWorkspace() {
     [],
   );
 
+  const handleCoWriterUpdate = useCallback(
+    (next: string) => {
+      setOutput((prev) => {
+        if (prev) {
+          setHistory((h) => {
+            const arr = [...h, prev];
+            return arr.length > 20 ? arr.slice(arr.length - 20) : arr;
+          });
+        }
+        return next;
+      });
+      if (next.trim()) translateToHinglish(next, LANG_META[detectedLang].mode);
+      else setHinglish("");
+    },
+    [detectedLang, translateToHinglish],
+  );
+
+  const handleUndo = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setOutput(prev);
+      if (prev.trim()) translateToHinglish(prev, LANG_META[detectedLang].mode);
+      else setHinglish("");
+      toast.success("Reverted to previous version");
+      return h.slice(0, -1);
+    });
+  }, [detectedLang, translateToHinglish]);
+
   const handleConvert = useCallback(async () => {
     if (!input.trim()) {
       toast.error("Paste or type your rough script first.");
