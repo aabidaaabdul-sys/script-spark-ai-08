@@ -259,11 +259,28 @@ export function ScriptForgeWorkspace() {
           ? (headerLang as Lang)
           : "hinglish";
       setDetectedLang(lang);
+      const totalChunks = Math.max(1, parseInt(res.headers.get("X-Chunks") || "1", 10) || 1);
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
       let acc = "";
+
+      // rAF-throttled UI updates so very large outputs don't block the main thread.
+      let pending = "";
+      let rafId: number | null = null;
+      const flush = () => {
+        rafId = null;
+        if (!pending) return;
+        acc += pending;
+        pending = "";
+        setOutput(acc);
+        setStage({ kind: "streaming", chars: acc.length });
+      };
+      const schedule = (s: string) => {
+        pending += s;
+        if (rafId == null) rafId = requestAnimationFrame(flush);
+      };
 
       while (true) {
         const { done, value } = await reader.read();
@@ -282,17 +299,16 @@ export function ScriptForgeWorkspace() {
             const delta = parsed.choices?.[0]?.delta?.content as
               | string
               | undefined;
-            if (delta) {
-              acc += delta;
-              setOutput(acc);
-              setStage({ kind: "streaming", chars: acc.length });
-            }
+            if (delta) schedule(delta);
           } catch {
             buffer = line + "\n" + buffer;
             break;
           }
         }
       }
+      if (rafId != null) cancelAnimationFrame(rafId);
+      flush();
+      void totalChunks;
 
       setStage({ kind: "done" });
       toast.success(
