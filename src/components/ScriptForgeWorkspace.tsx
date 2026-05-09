@@ -150,6 +150,22 @@ export function ScriptForgeWorkspace() {
       hinglishAbortRef.current = ctrl;
       setHinglish("");
       setHinglishBusy(true);
+
+      // rAF-throttled flushing for huge outputs to keep the UI smooth.
+      let pending = "";
+      let rafId: number | null = null;
+      const flush = () => {
+        rafId = null;
+        if (!pending) return;
+        const chunk = pending;
+        pending = "";
+        setHinglish((prev) => prev + chunk);
+      };
+      const schedule = (s: string) => {
+        pending += s;
+        if (rafId == null) rafId = requestAnimationFrame(flush);
+      };
+
       try {
         const res = await fetch("/api/convert", {
           method: "POST",
@@ -164,7 +180,6 @@ export function ScriptForgeWorkspace() {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        let acc = "";
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -179,24 +194,22 @@ export function ScriptForgeWorkspace() {
             if (payload === "[DONE]") continue;
             try {
               const parsed = JSON.parse(payload);
-              const delta = parsed.choices?.[0]?.delta?.content as
-                | string
-                | undefined;
-              if (delta) {
-                acc += delta;
-                setHinglish(acc);
-              }
+              const delta = parsed.choices?.[0]?.delta?.content as string | undefined;
+              if (delta) schedule(delta);
             } catch {
               buffer = line + "\n" + buffer;
               break;
             }
           }
         }
+        flush();
       } catch (err: unknown) {
         if ((err as { name?: string })?.name !== "AbortError") {
           console.error("translation error", err);
         }
       } finally {
+        if (rafId != null) cancelAnimationFrame(rafId);
+        flush();
         setHinglishBusy(false);
       }
     },
