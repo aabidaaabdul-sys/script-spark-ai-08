@@ -415,7 +415,7 @@ export const Route = createFileRoute("/api/voice")({
         const castObj: Record<string, string> = {};
         cast.forEach((v, k) => (castObj[k] = v));
 
-        return new Response(merged, {
+        return new Response(merged.buffer.slice(merged.byteOffset, merged.byteOffset + merged.byteLength) as ArrayBuffer, {
           status: 200,
           headers: {
             "Content-Type": "audio/mpeg",
