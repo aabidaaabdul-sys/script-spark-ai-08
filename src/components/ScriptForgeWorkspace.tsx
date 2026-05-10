@@ -24,6 +24,7 @@ import {
 import { ExportPanel } from "@/components/ExportPanel";
 import { CoWriterChat } from "@/components/CoWriterChat";
 import { VoiceStudio } from "@/components/VoiceStudio";
+import { StoryboardStudio } from "@/components/StoryboardStudio";
 
 const STORAGE_KEY = "scriptforge.input.v2";
 const MODE_KEY = "scriptforge.mode.v2";
@@ -816,6 +817,14 @@ Example:
         englishScript={output}
         meaningScript={hinglish}
         meaningLang={detectedLang}
+      />
+
+      {/* AI Storyboard Studio */}
+      <StoryboardStudio
+        englishScript={output}
+        meaningScript={hinglish}
+        meaningLang={detectedLang}
+        mode={mode}
       />
       {/* Footer trust strip */}
       <footer className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-border/40 pt-5 text-[11px] text-muted-foreground sm:flex-row">
