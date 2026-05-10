@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVoiceRouteImport } from './routes/api/voice'
+import { Route as ApiStoryboardImageRouteImport } from './routes/api/storyboard-image'
+import { Route as ApiStoryboardRouteImport } from './routes/api/storyboard'
 import { Route as ApiCowriterRouteImport } from './routes/api/cowriter'
 import { Route as ApiConvertRouteImport } from './routes/api/convert'
 
@@ -22,6 +24,16 @@ const IndexRoute = IndexRouteImport.update({
 const ApiVoiceRoute = ApiVoiceRouteImport.update({
   id: '/api/voice',
   path: '/api/voice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStoryboardImageRoute = ApiStoryboardImageRouteImport.update({
+  id: '/api/storyboard-image',
+  path: '/api/storyboard-image',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiStoryboardRoute = ApiStoryboardRouteImport.update({
+  id: '/api/storyboard',
+  path: '/api/storyboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCowriterRoute = ApiCowriterRouteImport.update({
@@ -39,12 +51,16 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/storyboard': typeof ApiStoryboardRoute
+  '/api/storyboard-image': typeof ApiStoryboardImageRoute
   '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/storyboard': typeof ApiStoryboardRoute
+  '/api/storyboard-image': typeof ApiStoryboardImageRoute
   '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRoutesById {
@@ -52,20 +68,43 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/storyboard': typeof ApiStoryboardRoute
+  '/api/storyboard-image': typeof ApiStoryboardImageRoute
   '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/convert' | '/api/cowriter' | '/api/voice'
+  fullPaths:
+    | '/'
+    | '/api/convert'
+    | '/api/cowriter'
+    | '/api/storyboard'
+    | '/api/storyboard-image'
+    | '/api/voice'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/convert' | '/api/cowriter' | '/api/voice'
-  id: '__root__' | '/' | '/api/convert' | '/api/cowriter' | '/api/voice'
+  to:
+    | '/'
+    | '/api/convert'
+    | '/api/cowriter'
+    | '/api/storyboard'
+    | '/api/storyboard-image'
+    | '/api/voice'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/convert'
+    | '/api/cowriter'
+    | '/api/storyboard'
+    | '/api/storyboard-image'
+    | '/api/voice'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiConvertRoute: typeof ApiConvertRoute
   ApiCowriterRoute: typeof ApiCowriterRoute
+  ApiStoryboardRoute: typeof ApiStoryboardRoute
+  ApiStoryboardImageRoute: typeof ApiStoryboardImageRoute
   ApiVoiceRoute: typeof ApiVoiceRoute
 }
 
@@ -83,6 +122,20 @@ declare module '@tanstack/react-router' {
       path: '/api/voice'
       fullPath: '/api/voice'
       preLoaderRoute: typeof ApiVoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/storyboard-image': {
+      id: '/api/storyboard-image'
+      path: '/api/storyboard-image'
+      fullPath: '/api/storyboard-image'
+      preLoaderRoute: typeof ApiStoryboardImageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/storyboard': {
+      id: '/api/storyboard'
+      path: '/api/storyboard'
+      fullPath: '/api/storyboard'
+      preLoaderRoute: typeof ApiStoryboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cowriter': {
@@ -106,8 +159,19 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiConvertRoute: ApiConvertRoute,
   ApiCowriterRoute: ApiCowriterRoute,
+  ApiStoryboardRoute: ApiStoryboardRoute,
+  ApiStoryboardImageRoute: ApiStoryboardImageRoute,
   ApiVoiceRoute: ApiVoiceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
