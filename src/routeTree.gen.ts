@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiVoiceRouteImport } from './routes/api/voice'
 import { Route as ApiCowriterRouteImport } from './routes/api/cowriter'
 import { Route as ApiConvertRouteImport } from './routes/api/convert'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVoiceRoute = ApiVoiceRouteImport.update({
+  id: '/api/voice',
+  path: '/api/voice',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCowriterRoute = ApiCowriterRouteImport.update({
@@ -33,30 +39,34 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/voice': typeof ApiVoiceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/convert' | '/api/cowriter'
+  fullPaths: '/' | '/api/convert' | '/api/cowriter' | '/api/voice'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/convert' | '/api/cowriter'
-  id: '__root__' | '/' | '/api/convert' | '/api/cowriter'
+  to: '/' | '/api/convert' | '/api/cowriter' | '/api/voice'
+  id: '__root__' | '/' | '/api/convert' | '/api/cowriter' | '/api/voice'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiConvertRoute: typeof ApiConvertRoute
   ApiCowriterRoute: typeof ApiCowriterRoute
+  ApiVoiceRoute: typeof ApiVoiceRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -66,6 +76,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/voice': {
+      id: '/api/voice'
+      path: '/api/voice'
+      fullPath: '/api/voice'
+      preLoaderRoute: typeof ApiVoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cowriter': {
@@ -89,6 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiConvertRoute: ApiConvertRoute,
   ApiCowriterRoute: ApiCowriterRoute,
+  ApiVoiceRoute: ApiVoiceRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
