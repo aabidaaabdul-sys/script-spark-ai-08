@@ -480,7 +480,7 @@ export function ScriptForgeWorkspace() {
           </Button>
           <div className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:flex">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
-            Streaming AI · Meaning-locked
+            Streaming · Meaning-locked
           </div>
         </div>
       </header>
@@ -812,14 +812,14 @@ Example:
         mode={mode}
       />
 
-      {/* AI Voice Studio */}
+      {/* Voice Studio */}
       <VoiceStudio
         englishScript={output}
         meaningScript={hinglish}
         meaningLang={detectedLang}
       />
 
-      {/* AI Storyboard Studio */}
+      {/* Storyboard Studio */}
       <StoryboardStudio
         englishScript={output}
         meaningScript={hinglish}
@@ -828,7 +828,7 @@ Example:
       />
       {/* Footer trust strip */}
       <footer className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-border/40 pt-5 text-[11px] text-muted-foreground sm:flex-row">
-        <span>© ScriptForge AI · Built for creators</span>
+        <span>© ScriptForge · Built for creators</span>
         <span className="flex items-center gap-3">
           <span>Meaning-locked</span>
           <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
@@ -844,7 +844,7 @@ Example:
           type="button"
           onClick={() => setChatOpen(true)}
           className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-primary/40 bg-gradient-primary px-4 py-3 text-primary-foreground shadow-glow transition-all hover:scale-[1.03] hover:shadow-elevated"
-          aria-label="Open AI Co-Writer"
+          aria-label="Open Co-Writer"
         >
           <Bot className="h-5 w-5" />
           <span className="hidden text-sm font-medium sm:inline">Co-Writer</span>
