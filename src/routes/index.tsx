@@ -8,14 +8,14 @@ export const Route = createFileRoute("/")({
     meta: [
       {
         title:
-          "ScriptForge AI — Rough Hinglish to Professional English Scripts",
+          "ScriptForge — Rough Hinglish to Professional English Scripts",
       },
       {
         name: "description",
         content:
           "Paste rough Hinglish or broken English. Get polished, professional, YouTube-ready English scripts instantly. No login required.",
       },
-      { property: "og:title", content: "ScriptForge AI" },
+      { property: "og:title", content: "ScriptForge" },
       {
         property: "og:description",
         content:

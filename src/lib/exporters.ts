@@ -236,7 +236,7 @@ function srtTime(seconds: number): string {
 export async function exportDOCX(inputs: ExportInputs) {
   const sections = buildDocxSections(inputs);
   const doc = new Document({
-    creator: "ScriptForge AI",
+    creator: "ScriptForge",
     title: `ScriptForge — ${inputs.mode}`,
     styles: {
       default: {
@@ -293,7 +293,7 @@ function buildDocxSections(inputs: ExportInputs) {
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       alignment: AlignmentType.CENTER,
-      children: [new TextRun({ text: "ScriptForge AI", bold: true })],
+      children: [new TextRun({ text: "ScriptForge", bold: true })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -461,7 +461,7 @@ export function exportPDF(inputs: ExportInputs) {
   // Title page
   doc.setFont("helvetica", "bold");
   doc.setFontSize(28);
-  doc.text("ScriptForge AI", pageW / 2, 3.0, { align: "center" });
+  doc.text("ScriptForge", pageW / 2, 3.0, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(14);
   doc.setTextColor(100);

@@ -456,7 +456,7 @@ export function ScriptForgeWorkspace() {
           </div>
           <div>
             <h1 className="font-display text-2xl font-semibold leading-none tracking-tight sm:text-3xl">
-              ScriptForge <span className="text-gradient-primary">AI</span>
+              ScriptForge
             </h1>
             <p className="mt-1.5 text-xs text-muted-foreground sm:text-sm">
               Rough Hinglish → professional movie screenplay. Industry format. Instantly.
@@ -471,7 +471,7 @@ export function ScriptForgeWorkspace() {
             className="group relative gap-2 border-primary/40 bg-primary/5 text-foreground hover:border-primary/70 hover:bg-primary/10"
           >
             <Bot className="h-4 w-4 text-primary" />
-            <span className="font-medium">AI Co-Writer</span>
+            <span className="font-medium">Co-Writer</span>
             {history.length > 0 && (
               <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
                 {history.length}

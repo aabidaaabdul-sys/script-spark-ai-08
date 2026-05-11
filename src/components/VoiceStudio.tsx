@@ -90,7 +90,7 @@ const NARRATOR_PRESETS: VoicePreset[] = [
   {
     id: "futuristic",
     voiceId: "kPtEHAvRnjUJFv7SK9WI", // Glitch
-    label: "AI Futuristic Voice",
+    label: "Futuristic Voice",
     desc: "Synthetic edge, cyber tone",
     vibe: "trailer",
   },
@@ -279,7 +279,7 @@ export function VoiceStudio({
             <Mic2 className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">AI Voice Studio</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Voice Studio</h2>
             <p className="text-xs text-muted-foreground">
               Cinematic narration, multi-character casting, multilingual delivery.
             </p>
