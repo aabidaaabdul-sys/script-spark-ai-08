@@ -456,7 +456,7 @@ export function ScriptForgeWorkspace() {
           </div>
           <div>
             <h1 className="font-display text-2xl font-semibold leading-none tracking-tight sm:text-3xl">
-              ScriptForge <span className="text-gradient-primary">AI</span>
+              ScriptForge
             </h1>
             <p className="mt-1.5 text-xs text-muted-foreground sm:text-sm">
               Rough Hinglish → professional movie screenplay. Industry format. Instantly.
@@ -471,7 +471,7 @@ export function ScriptForgeWorkspace() {
             className="group relative gap-2 border-primary/40 bg-primary/5 text-foreground hover:border-primary/70 hover:bg-primary/10"
           >
             <Bot className="h-4 w-4 text-primary" />
-            <span className="font-medium">AI Co-Writer</span>
+            <span className="font-medium">Co-Writer</span>
             {history.length > 0 && (
               <span className="rounded-full bg-primary/20 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
                 {history.length}
@@ -480,7 +480,7 @@ export function ScriptForgeWorkspace() {
           </Button>
           <div className="hidden items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground sm:flex">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary shadow-glow" />
-            Streaming AI · Meaning-locked
+            Streaming · Meaning-locked
           </div>
         </div>
       </header>
@@ -812,14 +812,14 @@ Example:
         mode={mode}
       />
 
-      {/* AI Voice Studio */}
+      {/* Voice Studio */}
       <VoiceStudio
         englishScript={output}
         meaningScript={hinglish}
         meaningLang={detectedLang}
       />
 
-      {/* AI Storyboard Studio */}
+      {/* Storyboard Studio */}
       <StoryboardStudio
         englishScript={output}
         meaningScript={hinglish}
@@ -828,7 +828,7 @@ Example:
       />
       {/* Footer trust strip */}
       <footer className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-border/40 pt-5 text-[11px] text-muted-foreground sm:flex-row">
-        <span>© ScriptForge AI · Built for creators</span>
+        <span>© ScriptForge · Built for creators</span>
         <span className="flex items-center gap-3">
           <span>Meaning-locked</span>
           <span className="h-1 w-1 rounded-full bg-muted-foreground/50" />
@@ -844,7 +844,7 @@ Example:
           type="button"
           onClick={() => setChatOpen(true)}
           className="group fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full border border-primary/40 bg-gradient-primary px-4 py-3 text-primary-foreground shadow-glow transition-all hover:scale-[1.03] hover:shadow-elevated"
-          aria-label="Open AI Co-Writer"
+          aria-label="Open Co-Writer"
         >
           <Bot className="h-5 w-5" />
           <span className="hidden text-sm font-medium sm:inline">Co-Writer</span>

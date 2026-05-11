@@ -22,7 +22,7 @@ export const Route = createFileRoute("/api/storyboard-image")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) {
           return new Response(
-            JSON.stringify({ error: "Image AI is not configured." }),
+            JSON.stringify({ error: "Image service is not configured." }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
         }
@@ -73,7 +73,7 @@ export const Route = createFileRoute("/api/storyboard-image")({
           if (r.status === 429)
             msg = "Rate limit reached. Slow down or retry in a moment.";
           else if (r.status === 402)
-            msg = "AI credits exhausted. Add credits in Workspace → Usage.";
+            msg = "Credits exhausted. Add credits in Workspace → Usage.";
           console.error("[storyboard-image] gateway", r.status, t.slice(0, 240));
           return new Response(JSON.stringify({ error: msg }), {
             status: 502,

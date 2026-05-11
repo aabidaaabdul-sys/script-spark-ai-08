@@ -284,7 +284,7 @@ export function CoWriterChat({
             </div>
             <div className="flex-1 min-w-0">
               <SheetTitle className="text-base font-display">
-                AI Co-Writer
+                CoWriter
               </SheetTitle>
               <SheetDescription className="text-[11px] truncate">
                 {headerSub}

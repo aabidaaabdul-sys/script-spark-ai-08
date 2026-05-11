@@ -476,7 +476,7 @@ async function tryProvidersStream(opts: {
   user: string;
   signal: AbortSignal;
 }): Promise<{ upstream: Response; provider: Provider } | { errorMsg: string }> {
-  let lastErrorMsg = "AI service unavailable.";
+  let lastErrorMsg = "Service unavailable.";
   for (const provider of opts.providers) {
     try {
       const upstream = await callStream(provider, opts.system, opts.user, opts.signal);
@@ -488,7 +488,7 @@ async function tryProvidersStream(opts: {
       else if (upstream.status === 429)
         lastErrorMsg = "Rate limit reached. Please wait a moment and retry.";
       else if (upstream.status === 402)
-        lastErrorMsg = "AI credits exhausted. Please add credits in Workspace Settings → Usage.";
+        lastErrorMsg = "Credits exhausted. Please add credits in Workspace Settings → Usage.";
       else if (upstream.status >= 500)
         lastErrorMsg = `${provider.name} server error (${upstream.status}). Trying fallback…`;
       else lastErrorMsg = `${provider.name} error (${upstream.status}).`;
@@ -508,7 +508,7 @@ export const Route = createFileRoute("/api/convert")({
         if (providers.length === 0) {
           return new Response(
             JSON.stringify({
-              error: "AI is not configured. Please add LOVABLE_API_KEY or OPENAI_API_KEY.",
+              error: "Service is not configured. Please add LOVABLE_API_KEY or OPENAI_API_KEY.",
             }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );

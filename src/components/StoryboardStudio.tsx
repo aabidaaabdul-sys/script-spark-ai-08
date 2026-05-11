@@ -282,7 +282,7 @@ export function StoryboardStudio({
             <Clapperboard className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">AI Storyboard Studio</h2>
+            <h2 className="text-lg font-semibold tracking-tight">Storyboard Studio</h2>
             <p className="text-xs text-muted-foreground">
               Cinematic frames, camera suggestions, and mood — generated from your screenplay.
             </p>
