@@ -119,7 +119,7 @@ export const Route = createFileRoute("/api/cowriter")({
         const providers = getProviders();
         if (providers.length === 0) {
           return new Response(
-            JSON.stringify({ error: "AI is not configured." }),
+            JSON.stringify({ error: "Service is not configured." }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
         }
@@ -158,7 +158,7 @@ export const Route = createFileRoute("/api/cowriter")({
         ];
 
         let upstream: Response | null = null;
-        let lastErr = "AI service unavailable.";
+        let lastErr = "Service unavailable.";
         for (const provider of providers) {
           try {
             const r = await callStream(provider, messages, request.signal);
@@ -169,8 +169,8 @@ export const Route = createFileRoute("/api/cowriter")({
             const t = await r.text().catch(() => "");
             console.error(`[cowriter] ${provider.name} ${r.status}: ${t.slice(0, 300)}`);
             if (r.status === 429) lastErr = "Rate limit reached. Please wait a moment and retry.";
-            else if (r.status === 402) lastErr = "AI credits exhausted. Add credits in Workspace → Usage.";
-            else if (r.status === 401 || r.status === 403) lastErr = "AI key unauthorized.";
+            else if (r.status === 402) lastErr = "Credits exhausted. Add credits in Workspace → Usage.";
+            else if (r.status === 401 || r.status === 403) lastErr = "Key unauthorized.";
             else lastErr = `${provider.name} error (${r.status}).`;
           } catch (e) {
             console.error(`[cowriter] ${provider.name} threw:`, e);
