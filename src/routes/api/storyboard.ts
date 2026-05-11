@@ -42,7 +42,7 @@ export const Route = createFileRoute("/api/storyboard")({
         const key = getKey();
         if (!key) {
           return new Response(
-            JSON.stringify({ error: "Storyboard AI is not configured." }),
+            JSON.stringify({ error: "Storyboard service is not configured." }),
             { status: 500, headers: { "Content-Type": "application/json" } },
           );
         }
@@ -145,7 +145,7 @@ Story mode: ${body.mode}. Visual style key: ${body.style}.`;
           const t = await r.text().catch(() => "");
           let msg = `Storyboard planner error (${r.status}).`;
           if (r.status === 429) msg = "Rate limit reached. Please wait a moment and retry.";
-          else if (r.status === 402) msg = "AI credits exhausted. Add credits in Workspace → Usage.";
+          else if (r.status === 402) msg = "Credits exhausted. Add credits in Workspace → Usage.";
           console.error("[storyboard] gateway", r.status, t.slice(0, 280));
           return new Response(JSON.stringify({ error: msg }), {
             status: 502,
