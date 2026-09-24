@@ -270,7 +270,13 @@ async function tts(
   });
   if (!r.ok) {
     const t = await r.text().catch(() => "");
-    throw new Error(`ElevenLabs ${r.status}: ${t.slice(0, 220)}`);
+    console.error("[voice] ElevenLabs error", r.status, t.slice(0, 300));
+    let msg = `Voice service error (${r.status}).`;
+    if (r.status === 401) msg = "Voice API key is invalid or missing permissions.";
+    else if (r.status === 429) msg = "Voice rate limit reached. Please retry in a moment.";
+    else if (/quota|credits/i.test(t)) msg = "Voice credits exhausted on your ElevenLabs account.";
+    else if (r.status === 422 || r.status === 400) msg = "Voice request rejected — try shorter text or another voice.";
+    throw new Error(msg);
   }
   const buf = await r.arrayBuffer();
   return new Uint8Array(buf);
