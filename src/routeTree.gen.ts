@@ -14,6 +14,7 @@ import { Route as ApiVoiceRouteImport } from './routes/api/voice'
 import { Route as ApiStoryboardImageRouteImport } from './routes/api/storyboard-image'
 import { Route as ApiStoryboardRouteImport } from './routes/api/storyboard'
 import { Route as ApiSbImageRouteImport } from './routes/api/sb-image'
+import { Route as ApiSbAnalyzeRouteImport } from './routes/api/sb-analyze'
 import { Route as ApiCowriterRouteImport } from './routes/api/cowriter'
 import { Route as ApiConvertRouteImport } from './routes/api/convert'
 
@@ -42,6 +43,11 @@ const ApiSbImageRoute = ApiSbImageRouteImport.update({
   path: '/api/sb-image',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSbAnalyzeRoute = ApiSbAnalyzeRouteImport.update({
+  id: '/api/sb-analyze',
+  path: '/api/sb-analyze',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCowriterRoute = ApiCowriterRouteImport.update({
   id: '/api/cowriter',
   path: '/api/cowriter',
@@ -57,6 +63,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/sb-analyze': typeof ApiSbAnalyzeRoute
   '/api/sb-image': typeof ApiSbImageRoute
   '/api/storyboard': typeof ApiStoryboardRoute
   '/api/storyboard-image': typeof ApiStoryboardImageRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/sb-analyze': typeof ApiSbAnalyzeRoute
   '/api/sb-image': typeof ApiSbImageRoute
   '/api/storyboard': typeof ApiStoryboardRoute
   '/api/storyboard-image': typeof ApiStoryboardImageRoute
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/api/convert': typeof ApiConvertRoute
   '/api/cowriter': typeof ApiCowriterRoute
+  '/api/sb-analyze': typeof ApiSbAnalyzeRoute
   '/api/sb-image': typeof ApiSbImageRoute
   '/api/storyboard': typeof ApiStoryboardRoute
   '/api/storyboard-image': typeof ApiStoryboardImageRoute
@@ -87,6 +96,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/convert'
     | '/api/cowriter'
+    | '/api/sb-analyze'
     | '/api/sb-image'
     | '/api/storyboard'
     | '/api/storyboard-image'
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/convert'
     | '/api/cowriter'
+    | '/api/sb-analyze'
     | '/api/sb-image'
     | '/api/storyboard'
     | '/api/storyboard-image'
@@ -105,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/api/convert'
     | '/api/cowriter'
+    | '/api/sb-analyze'
     | '/api/sb-image'
     | '/api/storyboard'
     | '/api/storyboard-image'
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiConvertRoute: typeof ApiConvertRoute
   ApiCowriterRoute: typeof ApiCowriterRoute
+  ApiSbAnalyzeRoute: typeof ApiSbAnalyzeRoute
   ApiSbImageRoute: typeof ApiSbImageRoute
   ApiStoryboardRoute: typeof ApiStoryboardRoute
   ApiStoryboardImageRoute: typeof ApiStoryboardImageRoute
@@ -158,6 +171,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSbImageRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sb-analyze': {
+      id: '/api/sb-analyze'
+      path: '/api/sb-analyze'
+      fullPath: '/api/sb-analyze'
+      preLoaderRoute: typeof ApiSbAnalyzeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cowriter': {
       id: '/api/cowriter'
       path: '/api/cowriter'
@@ -179,6 +199,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiConvertRoute: ApiConvertRoute,
   ApiCowriterRoute: ApiCowriterRoute,
+  ApiSbAnalyzeRoute: ApiSbAnalyzeRoute,
   ApiSbImageRoute: ApiSbImageRoute,
   ApiStoryboardRoute: ApiStoryboardRoute,
   ApiStoryboardImageRoute: ApiStoryboardImageRoute,
