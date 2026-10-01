@@ -38,6 +38,44 @@ export type SceneAnalysis = {
   cameraDirection: string;
   lighting: string;
   keyMoment: string;
+  // Deeper staging fields (optional for older saved projects)
+  season?: string;
+  positions?: string;
+  expressions?: string;
+  bodyLanguage?: string;
+  foreground?: string;
+  midground?: string;
+  background?: string;
+  materials?: string;
+  continuityNotes?: string;
+};
+
+export type QualityMode = "fast" | "cinematic" | "max";
+export const QUALITY_MODES: { id: QualityMode; label: string; hint: string; corrections: number; inspect: boolean }[] = [
+  { id: "fast", label: "Fast", hint: "Quickest. No automatic inspection.", corrections: 0, inspect: false },
+  { id: "cinematic", label: "Cinematic", hint: "High quality, inspected, up to 1 automatic fix.", corrections: 1, inspect: true },
+  { id: "max", label: "Maximum Detail", hint: "Highest quality, inspected, up to 2 automatic fixes.", corrections: 2, inspect: true },
+];
+
+export type InspectCheck = { name: string; result: "pass" | "issue" | "unclear"; note: string };
+export type InspectReport = {
+  status: "approved" | "needs_fix" | "unresolved";
+  checks: InspectCheck[];
+  issues: string[];
+  correction: string; // targeted edit instruction, "" if none
+  fixType: "none" | "edit" | "regenerate";
+  model: string;
+  at: number;
+};
+
+export type FrameVersion = {
+  key: string; // IndexedDB asset key
+  kind: "generated" | "corrected" | "uploaded";
+  createdAt: number;
+  prompt?: string;
+  quality?: QualityMode;
+  report?: InspectReport;
+  hash?: string;
 };
 
 export type FrameStatus = "idle" | "queued" | "processing" | "completed" | "failed" | "cancelled";
@@ -56,6 +94,12 @@ export type StoryFrame = SceneAnalysis & {
   imageKey?: string; // IndexedDB key
   imageUpdatedAt?: number;
   promptUsed?: string;
+  versions?: FrameVersion[];
+  report?: InspectReport;
+  genHash?: string; // hash of prompt+refs+settings used for current image
+  stage?: string; // live pipeline stage label
+  styleOverride?: string;
+  aspectOverride?: Aspect;
 };
 
 export const SHOT_TYPES = [
@@ -129,6 +173,13 @@ export function buildContinuity(
   return lines.join(" ").slice(0, 600);
 }
 
+const QUALITY_TECH: Record<QualityMode, string> = {
+  fast: "Clean, readable composition; natural proportions; consistent perspective.",
+  cinematic: "High visual fidelity, detailed textures, natural anatomy and hands, coherent faces, consistent perspective and motivated lighting, professional cinematic finish.",
+  max: "Maximum fine detail: crisp micro-textures in fabric, skin pores, wood grain, stone and metal; physically plausible light falloff, reflections and shadow direction; anatomically correct hands and faces; precise perspective; professional cinematic finish.",
+};
+
+/** Cinematic Prompt Compiler: structured scene data -> sectioned image instructions. */
 export function buildVisualPrompt(args: {
   frame: StoryFrame;
   chars: CharacterEntry[];
@@ -136,25 +187,38 @@ export function buildVisualPrompt(args: {
   style: string;
   aspect: string;
   continuity: string;
+  quality?: QualityMode;
 }) {
-  const { frame: f, chars, loc, style, aspect, continuity } = args;
+  const { frame: f, chars, loc, style, aspect, continuity, quality = "cinematic" } = args;
   const present = chars.filter((c) => f.characters.includes(c.id));
+  const j = (...xs: (string | undefined | false)[]) => xs.filter(Boolean).join("; ");
+  const count = present.length
+    ? `Exactly ${present.length} named character${present.length > 1 ? "s" : ""} visible (${present.map((c) => c.name).join(", ")}); no extra people unless the scene states a crowd.`
+    : "No named characters visible.";
   const parts = [
-    `SUBJECT & ACTION: ${f.keyMoment || f.action}`,
+    `SUBJECT: ${f.keyMoment || f.action}. ${count}${f.positions ? ` Positions: ${f.positions}.` : ""}${f.objects ? ` Key objects: ${f.objects}.` : ""}`,
+    `ENVIRONMENT: ${j(f.intExt, loc ? `${loc.name} — ${loc.architecture}` : f.heading, loc?.environment, loc?.objects && `recurring details: ${loc.objects}`, f.weather && `weather: ${f.weather}`, f.season && `season: ${f.season}`, `time: ${f.timeOfDay || "as implied by the scene"}`)}`,
+    f.foreground || f.midground || f.background
+      ? `DEPTH LAYERS: ${j(f.foreground && `foreground: ${f.foreground}`, f.midground && `midground: ${f.midground}`, f.background && `background: ${f.background}`)}`
+      : "",
     present.length
-      ? `CHARACTERS (keep exactly as described, do not change gender, age or clothing): ${present.map(describeCharacter).join(" | ")}`
-      : "CHARACTERS: none visible",
-    `LOCATION: ${f.intExt ? f.intExt + ". " : ""}${loc ? `${loc.name} — ${loc.architecture}; ${loc.environment}` : f.heading}`,
-    `TIME: ${f.timeOfDay || "unspecified"}${f.weather ? `; WEATHER: ${f.weather}` : ""}`,
-    `LIGHTING: ${f.lighting || loc?.lighting || "motivated by the scene"}`,
-    `IMPORTANT OBJECTS: ${[f.objects, loc?.objects].filter(Boolean).join(", ") || "none"}`,
-    `MOOD: ${f.mood}`,
-    `CAMERA: ${f.cameraShot}${f.cameraDirection ? `, ${f.cameraDirection}` : ""}; composition for ${aspect} frame`,
-    loc?.palette ? `COLOR/TONE: ${loc.palette}` : "",
-    `STORY CONTEXT: ${f.description}`,
-    continuity ? `CONTINUITY: ${continuity}` : "",
+      ? `CHARACTER DETAIL (canonical — keep identity, gender, age and clothing exactly; each character visually distinct): ${present.map(describeCharacter).join(" | ")}${f.expressions ? `. Expressions: ${f.expressions}` : ""}${f.bodyLanguage ? `. Body language: ${f.bodyLanguage}` : ""}`
+      : "",
+    `CINEMATOGRAPHY: ${f.cameraShot}${f.cameraDirection ? `, ${f.cameraDirection}` : ""}; composed for a ${aspect} frame with a clear focal point and visual hierarchy.`,
+    `LIGHTING: ${f.lighting || loc?.lighting || "motivated by the scene's light sources"}; consistent shadow direction and color temperature.`,
+    f.materials ? `MATERIALS & TEXTURES: ${f.materials}` : "",
+    `MOOD & ATMOSPHERE: ${f.mood || "as the scene implies"}${loc?.palette ? `; palette: ${loc.palette}` : ""}. Story context: ${f.description}`,
+    continuity ? `CONTINUITY: ${continuity}${f.continuityNotes ? ` ${f.continuityNotes}` : ""}` : f.continuityNotes ? `CONTINUITY: ${f.continuityNotes}` : "",
     `STYLE: ${style}`,
-    "No text, captions, subtitles, watermarks or logos in the image.",
+    `TECHNICAL QUALITY: ${QUALITY_TECH[quality]}`,
+    "STRICT: follow the screenplay exactly — do not add people, change the location, time of day, clothing or props. No text, captions, subtitles, watermarks or logos.",
   ];
   return parts.filter(Boolean).join("\n");
+}
+
+/** Small stable hash for cache validation. */
+export function hashStr(s: string) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0).toString(36);
 }
