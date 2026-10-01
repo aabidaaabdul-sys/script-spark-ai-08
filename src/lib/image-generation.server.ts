@@ -7,6 +7,7 @@ export type ImageRequest = {
   prompt: string;
   aspectRatio: string;
   references: { mime: string; bytes: Uint8Array }[];
+  quality: "fast" | "cinematic" | "max";
   signal?: AbortSignal;
 };
 
@@ -21,8 +22,20 @@ export class ImageGenError extends Error {
   }
 }
 
+export type ProviderCapabilities = {
+  referenceImages: boolean;
+  imageEdit: boolean;
+  inpainting: boolean;
+  seed: boolean;
+  negativePrompt: boolean;
+  qualityLevels: string[];
+  sizes: string[];
+};
+
 interface ImageProvider {
   name: string;
+  model: string;
+  capabilities: ProviderCapabilities;
   generate(req: ImageRequest): Promise<ImageResult>;
 }
 
@@ -31,6 +44,8 @@ function sizeFor(aspect: string) {
   if (aspect === "1:1") return "1024x1024";
   return "1536x1024"; // 16:9, 4:3, 21:9 — closest landscape size; composition guided by prompt
 }
+
+const QUALITY = { fast: "medium", cinematic: "high", max: "max" } as const;
 
 function friendly(status: number, body: string) {
   if (status === 429) return "Too many image requests right now. Retrying shortly may help.";
@@ -42,9 +57,18 @@ function friendly(status: number, body: string) {
 
 class LovableGatewayProvider implements ImageProvider {
   name = "lovable-gateway";
+  capabilities: ProviderCapabilities = {
+    referenceImages: true,
+    imageEdit: true,
+    inpainting: false, // no mask workflow wired; corrections use whole-image edits
+    seed: false,
+    negativePrompt: false,
+    qualityLevels: ["fast", "cinematic", "max"],
+    sizes: ["1536x1024", "1024x1536", "1024x1024"],
+  };
   constructor(
     private apiKey: string,
-    private model: string,
+    public model: string,
   ) {}
   async generate(req: ImageRequest): Promise<ImageResult> {
     const base = "https://ai.gateway.lovable.dev/v1/images";
@@ -54,6 +78,7 @@ class LovableGatewayProvider implements ImageProvider {
       form.set("model", this.model);
       form.set("prompt", req.prompt);
       form.set("size", sizeFor(req.aspectRatio));
+      form.set("quality", QUALITY[req.quality]);
       req.references.forEach((ref, i) =>
         form.append("image[]", new Blob([ref.bytes as BlobPart], { type: ref.mime }), `ref-${i}.${ref.mime.split("/")[1]}`),
       );
@@ -67,7 +92,7 @@ class LovableGatewayProvider implements ImageProvider {
       r = await fetch(`${base}/generations`, {
         method: "POST",
         headers: { Authorization: `Bearer ${this.apiKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: this.model, prompt: req.prompt, size: sizeFor(req.aspectRatio) }),
+        body: JSON.stringify({ model: this.model, prompt: req.prompt, size: sizeFor(req.aspectRatio), quality: QUALITY[req.quality] }),
         signal: req.signal,
       });
     }

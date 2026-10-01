@@ -34,7 +34,8 @@ Rules:
 - Use ONLY facts stated or clearly implied by the script. Never invent gender, age, clothing, locations, time or events that contradict it. If unknown, use "" (empty string). Scripts may be in Hindi/Urdu/Hinglish; always write values in English.
 - "characters": the FULL updated Character Bible — every existing entry (keep its id and existing details, only fill empty fields or add details the new scenes state) plus new characters. Fields: id (lowercase-kebab of the name), name, ageRange, gender, appearance, hair, clothing, accessories, visualCues.
 - "locations": the FULL updated Location Bible, same merge rule. Fields: id (lowercase-kebab), name, architecture, environment, objects, lighting, palette.
-- "scenes": one entry per input scene, same order, fields: sceneId (copy input id), title (<=8 words), description (1-2 sentences of what the viewer sees), locationId, characters (array of character ids visible), action, objects, weather, mood (one or two words), cameraShot (one of: ${SHOT_TYPES.join(", ")}), cameraDirection (e.g. "establishing shot", "character-focused composition", "action-focused composition", "environmental composition"; "" if it adds nothing), lighting, keyMoment (the single most important visual moment to draw).
+- "scenes": one entry per input scene, same order, fields: sceneId (copy input id), title (<=8 words), description (1-2 sentences of what the viewer sees), locationId, characters (array of character ids visible), action, objects, weather, mood (one or two words), cameraShot (one of: ${SHOT_TYPES.join(", ")}), cameraDirection (e.g. "establishing shot", "character-focused composition", "action-focused composition", "environmental composition"; "" if it adds nothing), lighting, keyMoment (the single most important visual moment to draw), season, positions (where each visible character stands/sits relative to others and the set), expressions (facial expressions per character), bodyLanguage, foreground, midground, background (what sits in each depth layer), materials (notable textures: fabric, wood, glass, stone, metal, water...), continuityNotes (props/costume/injury/time carried from earlier scenes, or "").
+- Base everything on the scene's action and dialogue text, not just the heading. If a detail is missing, choose the most conservative choice consistent with the scene, never a new story element.
 - Pick shots that fit the scene; do not force dramatic angles on simple scenes.`;
 
 async function readResponsesStream(r: Response): Promise<string> {
@@ -141,6 +142,9 @@ export const Route = createFileRoute("/api/sb-analyze")({
             action: str(x.action, 500), objects: str(x.objects, 300), weather: str(x.weather, 80), mood: str(x.mood, 40),
             cameraShot: str(x.cameraShot, 40) || "Medium Shot", cameraDirection: str(x.cameraDirection, 80),
             lighting: str(x.lighting, 200), keyMoment: str(x.keyMoment, 400),
+            season: str(x.season, 40), positions: str(x.positions, 300), expressions: str(x.expressions, 300),
+            bodyLanguage: str(x.bodyLanguage, 200), foreground: str(x.foreground, 200), midground: str(x.midground, 200),
+            background: str(x.background, 200), materials: str(x.materials, 200), continuityNotes: str(x.continuityNotes, 300),
           })),
         });
       },

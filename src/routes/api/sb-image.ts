@@ -9,6 +9,8 @@ const clean = (s: string) => s.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, ""
 const Body = z.object({
   prompt: z.string().min(10).max(6000),
   aspectRatio: z.enum(["16:9", "9:16", "4:3", "1:1", "21:9"]).default("16:9"),
+  quality: z.enum(["fast", "cinematic", "max"]).default("cinematic"),
+  purpose: z.enum(["scene", "correct"]).default("scene"),
   references: z.array(z.string().max(6_000_000)).max(3).default([]),
   meta: z
     .object({
@@ -48,14 +50,19 @@ export const Route = createFileRoute("/api/sb-image")({
           refs.push({ mime: m[1], bytes });
         }
         let prompt = clean(body.prompt);
-        if (refs.length)
+        if (body.purpose === "correct") {
+          if (!refs.length) return json({ error: "Correction needs the image to fix." }, 400);
+          prompt =
+            "Edit the FIRST attached image. Keep composition, characters, identity, clothing, location and lighting the same; change ONLY what this correction asks:\n" +
+            prompt;
+        } else if (refs.length)
           prompt =
             "Use the attached reference image(s) only to keep the character/location appearance consistent. Create a NEW scene as described:\n" +
             prompt;
         try {
           const svc = getImageService();
           const started = Date.now();
-          const out = await svc.generate({ prompt, aspectRatio: body.aspectRatio, references: refs, signal: request.signal });
+          const out = await svc.generate({ prompt, aspectRatio: body.aspectRatio, references: refs, quality: body.quality, signal: request.signal });
           return json({
             image: `data:${out.mime};base64,${out.base64}`,
             metadata: {
@@ -63,6 +70,8 @@ export const Route = createFileRoute("/api/sb-image")({
               model: out.model,
               aspectRatio: body.aspectRatio,
               usedReferences: refs.length,
+              quality: body.quality,
+              purpose: body.purpose,
               ms: Date.now() - started,
               ...body.meta,
               createdAt: new Date().toISOString(),
