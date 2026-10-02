@@ -9,12 +9,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { toast } from "sonner";
 import {
   Clapperboard, Wand2, Loader2, RefreshCw, Download, Trash2, Square, Copy, Pencil,
-  GripVertical, ChevronUp, ChevronDown, FileText, Archive, LayoutGrid, ScanSearch, Upload, X, CheckCircle2, AlertTriangle,
+  GripVertical, ChevronUp, ChevronDown, FileText, Archive, LayoutGrid, ScanSearch, Upload, X, CheckCircle2, AlertTriangle, ShieldCheck, Sparkles, History, ImageUp,
 } from "lucide-react";
 import { parseScenes, parseElements, type ParsedScene } from "@/lib/screenplay";
 import {
-  ASPECTS, SHOT_TYPES, VISUAL_STYLES, buildContinuity, buildVisualPrompt, styleHint,
-  type Aspect, type CharacterEntry, type LocationEntry, type StoryFrame,
+  ASPECTS, SHOT_TYPES, VISUAL_STYLES, QUALITY_MODES, buildContinuity, buildVisualPrompt, styleHint, hashStr, describeCharacter,
+  type Aspect, type QualityMode, type InspectReport, type FrameVersion, type CharacterEntry, type LocationEntry, type StoryFrame,
 } from "@/lib/storyboard-types";
 import { getAsset, getProject, putAsset, putProject, deleteAsset } from "@/lib/storyboard-store";
 import { downloadDataUrl, exportContactSheet, exportPdf, exportZip, fileName, type PdfOptions } from "@/lib/storyboard-export";
@@ -32,6 +32,7 @@ type Project = {
   customStyle: string;
   aspect: Aspect;
   title: string;
+  quality?: QualityMode;
 };
 
 type Step = { label: string; state: "pending" | "active" | "done" | "failed" };
@@ -78,6 +79,10 @@ export function VisualStoryboard({
   const [dragId, setDragId] = useState<string | null>(null);
   const [pdfOpt, setPdfOpt] = useState<PdfOptions>({ description: true, characters: true, camera: true, dialogue: true, prompt: false });
   const [exporting, setExporting] = useState(false);
+  const [fixing, setFixing] = useState<StoryFrame | null>(null);
+  const [fixText, setFixText] = useState("");
+  const [versionsOf, setVersionsOf] = useState<string | null>(null);
+  const [compare, setCompare] = useState<[string, string] | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pRef = useRef(p);
   pRef.current = p;
@@ -96,7 +101,7 @@ export function VisualStoryboard({
           saved.frames = saved.frames.map((f) => (f.status === "processing" || f.status === "queued" ? { ...f, status: f.imageKey ? "completed" : "cancelled" } : f));
           setP(saved);
           const imgs: Record<string, string> = {};
-          for (const f of saved.frames) if (f.imageKey) { const a = await getAsset(f.imageKey); if (a) imgs[f.imageKey] = a.dataUrl; }
+          for (const f of saved.frames) for (const k of new Set([f.imageKey, ...(f.versions ?? []).map((v) => v.key)])) { if (!k) continue; const a = await getAsset(k); if (a) imgs[k] = a.dataUrl; }
           setImages(imgs);
         }
       } catch (e) {
@@ -121,7 +126,7 @@ export function VisualStoryboard({
     if (f.editedPrompt) return f.editedPrompt;
     return buildVisualPrompt({
       frame: f, chars: proj.characters, loc: proj.locations.find((l) => l.id === f.locationId),
-      style: styleHint(proj.style, proj.customStyle), aspect: proj.aspect,
+      style: styleHint(proj.style, proj.customStyle), aspect: proj.aspect, quality: proj.quality ?? "cinematic",
       continuity: buildContinuity(f, proj.frames, proj.characters, proj.locations),
     });
   }, []);
@@ -193,12 +198,13 @@ export function VisualStoryboard({
         dialogueExcerpt: s.dialogue.slice(0, 3).map((d) => `${d.character}: ${d.text}`).join("\n").slice(0, 400),
         originalPrompt: "", editedPrompt: old?.editedPrompt,
         status: old?.imageKey ? "completed" : "idle", imageKey: old?.imageKey, promptUsed: old?.promptUsed,
+        versions: old?.versions, report: old?.report, genHash: old?.genHash,
       };
     });
     const proj = { ...pRef.current, characters: chars, locations: locs, frames };
     proj.frames = frames.map((f) => ({ ...f, originalPrompt: buildVisualPrompt({
       frame: f, chars, loc: locs.find((l) => l.id === f.locationId), style: styleHint(proj.style, proj.customStyle),
-      aspect: proj.aspect, continuity: buildContinuity(f, frames, chars, locs),
+      aspect: proj.aspect, quality: proj.quality ?? "cinematic", continuity: buildContinuity(f, frames, chars, locs),
     }) }));
     setP(proj);
     pRef.current = proj;
@@ -207,43 +213,133 @@ export function VisualStoryboard({
   }, [script]);
 
   /* ---------- image queue ---------- */
-  const renderOne = useCallback(async (id: string, signal: AbortSignal) => {
+  const inspectImage = useCallback(async (f: StoryFrame, proj: Project, image: string, signal: AbortSignal): Promise<InspectReport> => {
+    const loc = proj.locations.find((l) => l.id === f.locationId);
+    return postJson<InspectReport>("/api/sb-inspect", {
+      image,
+      scene: {
+        heading: f.heading, description: f.description, keyMoment: f.keyMoment, timeOfDay: f.timeOfDay,
+        location: loc ? `${loc.name} — ${loc.architecture}` : f.heading,
+        characters: proj.characters.filter((c) => f.characters.includes(c.id)).map(describeCharacter),
+        objects: f.objects, cameraShot: f.cameraShot, lighting: f.lighting, style: styleHint(proj.style, proj.customStyle),
+      },
+    }, signal);
+  }, []);
+
+  const callImage = useCallback(async (body: unknown, signal: AbortSignal) => {
+    for (let attempt = 0; ; attempt++) {
+      try { return await postJson<{ image: string; metadata: Record<string, unknown> }>("/api/sb-image", body, signal); }
+      catch (e) {
+        if ((e as Error).name === "AbortError" || !retryable(e) || attempt >= 2) throw e;
+        await sleep(((e as HttpError).retryAfter ?? 2 ** attempt * 3) * 1000 + Math.random() * 800, signal);
+      }
+    }
+  }, []);
+
+  const saveVersion = useCallback(async (id: string, image: string, v: Omit<FrameVersion, "key" | "createdAt">, meta: Record<string, unknown>) => {
+    const key = `img-${id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await putAsset({ id: key, projectId: PROJECT_ID, type: "image", mimeType: image.slice(5, image.indexOf(";")), size: image.length, dataUrl: image, createdAt: new Date().toISOString(), metadata: { ...meta, kind: v.kind } });
+    setImages((m) => ({ ...m, [key]: image }));
+    const ver: FrameVersion = { ...v, key, createdAt: Date.now() };
+    setP((prev) => ({ ...prev, frames: prev.frames.map((f) => (f.id === id ? { ...f, versions: [...(f.versions ?? (f.imageKey ? [{ key: f.imageKey, kind: "generated", createdAt: f.imageUpdatedAt ?? 0 } as FrameVersion] : [])), ver].slice(-12) } : f)) }));
+    return ver;
+  }, []);
+
+  /** Multi-stage: compile prompt -> generate -> inspect -> targeted correction -> reinspect -> finalize. */
+  const renderOne = useCallback(async (id: string, signal: AbortSignal, force = false) => {
     const proj = pRef.current;
     const f = proj.frames.find((x) => x.id === id);
     if (!f) return false;
+    const quality = proj.quality ?? "cinematic";
+    const mode = QUALITY_MODES.find((m) => m.id === quality)!;
     const prompt = promptFor(f, proj);
     const refs = [
       ...proj.characters.filter((c) => f.characters.includes(c.id) && c.referenceImage).map((c) => c.referenceImage!),
       proj.locations.find((l) => l.id === f.locationId)?.referenceImage,
     ].filter(Boolean).slice(0, 3) as string[];
-    patchFrame(id, { status: "processing", error: undefined });
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        const res = await postJson<{ image: string; metadata: Record<string, unknown> }>("/api/sb-image", {
-          prompt, aspectRatio: proj.aspect, references: refs,
-          meta: { sceneDescription: f.description, characters: f.characters, location: f.locationId, timeOfDay: f.timeOfDay, mood: f.mood, cameraShot: f.cameraShot, visualStyle: styleHint(proj.style, proj.customStyle) },
-        }, signal);
-        const key = `img-${id}-${Date.now()}`;
-        await putAsset({ id: key, projectId: PROJECT_ID, type: "image", mimeType: "image/png", size: res.image.length, dataUrl: res.image, createdAt: new Date().toISOString(), metadata: res.metadata });
-        const oldKey = pRef.current.frames.find((x) => x.id === id)?.imageKey;
-        if (oldKey && !pRef.current.frames.some((x) => x.id !== id && x.imageKey === oldKey)) deleteAsset(oldKey).catch(() => {});
-        setImages((m) => ({ ...m, [key]: res.image }));
-        patchFrame(id, { status: "completed", imageKey: key, imageUpdatedAt: Date.now(), promptUsed: prompt });
-        return true;
-      } catch (e) {
-        if ((e as Error).name === "AbortError") { patchFrame(id, { status: "cancelled" }); return false; }
-        if (retryable(e) && attempt < 2) {
-          try { await sleep(((e as HttpError).retryAfter ?? 2 ** attempt * 3) * 1000 + Math.random() * 800, signal); continue; }
-          catch { patchFrame(id, { status: "cancelled" }); return false; }
+    const hash = hashStr([prompt, proj.aspect, quality, ...refs.map((r) => hashStr(r))].join("|"));
+    if (!force && f.imageKey && f.genHash === hash && f.status === "completed") return true; // unchanged — skip
+    const meta = { sceneDescription: f.description, characters: f.characters, location: f.locationId, timeOfDay: f.timeOfDay, mood: f.mood, cameraShot: f.cameraShot, visualStyle: styleHint(proj.style, proj.customStyle) };
+    patchFrame(id, { status: "processing", error: undefined, stage: "Generating image" });
+    try {
+      const res = await callImage({ prompt, aspectRatio: proj.aspect, quality, references: refs, meta }, signal);
+      let image = res.image;
+      let ver = await saveVersion(id, image, { kind: "generated", prompt, quality, hash }, res.metadata);
+      patchFrame(id, { imageKey: ver.key, imageUpdatedAt: Date.now(), promptUsed: prompt, genHash: hash, report: undefined });
+      let report: InspectReport | undefined;
+      if (mode.inspect) {
+        for (let fix = 0; ; fix++) {
+          patchFrame(id, { stage: fix ? `Re-inspecting correction ${fix}` : "Inspecting quality" });
+          try { report = await inspectImage(f, pRef.current, image, signal); }
+          catch (e) {
+            if ((e as Error).name === "AbortError") throw e;
+            report = undefined;
+            patchFrame(id, { error: `Quality inspection failed: ${(e as Error).message}` });
+            break;
+          }
+          if (report.status === "approved" || !report.correction || fix >= mode.corrections) break;
+          patchFrame(id, { stage: `Correcting: ${report.issues[0] ?? "detected issue"}` });
+          const fixRes = report.fixType === "regenerate"
+            ? await callImage({ prompt: `${prompt}\nCORRECTION: ${report.correction}`, aspectRatio: proj.aspect, quality, references: refs, meta }, signal)
+            : await callImage({ prompt: report.correction, aspectRatio: proj.aspect, quality, purpose: "correct", references: [image, ...refs].slice(0, 3), meta }, signal);
+          image = fixRes.image;
+          ver = await saveVersion(id, image, { kind: "corrected", prompt: report.correction, quality, hash, report }, fixRes.metadata);
+          patchFrame(id, { imageKey: ver.key, imageUpdatedAt: Date.now() });
         }
-        patchFrame(id, { status: "failed", error: `Scene generation failed. ${(e as Error).message}` });
-        return false;
+        if (report && report.status === "needs_fix") report = { ...report, status: "unresolved" };
       }
+      patchFrame(id, { status: "completed", stage: undefined, report });
+      return true;
+    } catch (e) {
+      if ((e as Error).name === "AbortError") { patchFrame(id, { status: pRef.current.frames.find((x) => x.id === id)?.imageKey ? "completed" : "cancelled", stage: undefined }); return false; }
+      patchFrame(id, { status: "failed", stage: undefined, error: `Scene generation failed. ${(e as Error).message}` });
+      return false;
     }
-    return false;
-  }, [patchFrame, promptFor]);
+  }, [patchFrame, promptFor, callImage, inspectImage, saveVersion]);
 
-  const runQueue = useCallback(async (ids: string[], signal: AbortSignal, stepIdx?: number) => {
+  const inspectOnly = async (id: string) => {
+    const f = p.frames.find((x) => x.id === id); const img = f?.imageKey && images[f.imageKey];
+    if (!f || !img) return;
+    const c = start();
+    patchFrame(id, { stage: "Inspecting quality" });
+    try { const r = await inspectImage(f, p, img, c.signal); patchFrame(id, { report: r }); r.status === "approved" ? toast.success("No meaningful issues found.") : toast.message(`${r.issues.length} issue(s) found.`); }
+    catch (e) { if ((e as Error).name !== "AbortError") toast.error(`Inspection failed: ${(e as Error).message}`); }
+    finally { patchFrame(id, { stage: undefined }); finish(); }
+  };
+
+  const correctOnly = async (id: string, instruction: string) => {
+    const f = p.frames.find((x) => x.id === id); const img = f?.imageKey && images[f.imageKey];
+    if (!f || !img || instruction.trim().length < 10) return toast.error("Describe the fix (at least 10 characters).");
+    const c = start();
+    patchFrame(id, { status: "processing", stage: "Correcting image" });
+    try {
+      const res = await callImage({ prompt: instruction.trim(), aspectRatio: p.aspect, quality: p.quality ?? "cinematic", purpose: "correct", references: [img], meta: {} }, c.signal);
+      const ver = await saveVersion(id, res.image, { kind: "corrected", prompt: instruction.trim(), quality: p.quality }, res.metadata);
+      patchFrame(id, { imageKey: ver.key, imageUpdatedAt: Date.now(), stage: "Re-inspecting" });
+      let report: InspectReport | undefined;
+      try { report = await inspectImage(f, pRef.current, res.image, c.signal); } catch (e) { if ((e as Error).name === "AbortError") throw e; }
+      patchFrame(id, { status: "completed", report });
+      toast.success("Corrected version saved. The original is kept in Versions.");
+    } catch (e) {
+      patchFrame(id, { status: "completed" });
+      if ((e as Error).name !== "AbortError") toast.error(`Correction failed: ${(e as Error).message}`);
+    } finally { patchFrame(id, { stage: undefined }); finish(); }
+  };
+
+  const restoreVersion = (id: string, key: string) => { patchFrame(id, { imageKey: key, imageUpdatedAt: Date.now(), report: pRef.current.frames.find((f) => f.id === id)?.versions?.find((v) => v.key === key)?.report }); toast.success("Version restored."); };
+
+  const replaceImage = async (id: string, file: File | undefined) => {
+    if (!file) return;
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return toast.error("Use a PNG, JPEG or WebP image.");
+    if (file.size > 8 * 1024 * 1024) return toast.error("Image must be under 8 MB.");
+    const url = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result as string); r.onerror = () => rej(r.error); r.readAsDataURL(file); }).catch(() => "");
+    if (!url) return toast.error("Could not read that image.");
+    const ver = await saveVersion(id, url, { kind: "uploaded" }, { uploaded: true });
+    patchFrame(id, { imageKey: ver.key, imageUpdatedAt: Date.now(), status: "completed", report: undefined, genHash: undefined });
+    toast.success("Image replaced. Previous versions are kept.");
+  };
+
+  const runQueue = useCallback(async (ids: string[], signal: AbortSignal, stepIdx?: number, force = true) => {
     setP((prev) => ({ ...prev, frames: prev.frames.map((f) => (ids.includes(f.id) ? { ...f, status: "queued", error: undefined } : f)) }));
     let next = 0, done = 0, failed = 0;
     const worker = async () => {
@@ -251,7 +347,7 @@ export function VisualStoryboard({
         const id = ids[next++];
         const n = pRef.current.frames.find((f) => f.id === id)?.number;
         if (stepIdx !== undefined) setStep(stepIdx, "active", `Generating Scene ${n} (${done}/${ids.length} done)`);
-        const ok = await renderOne(id, signal);
+        const ok = await renderOne(id, signal, force);
         if (ok) done++; else failed++;
       }
     };
@@ -278,8 +374,8 @@ export function VisualStoryboard({
     try {
       const proj = await analyze(c.signal, 0);
       if (!proj) return;
-      const ids = proj.frames.filter((f) => f.status !== "completed").map((f) => f.id);
-      const { failed } = await runQueue(ids, c.signal, 3);
+      const ids = proj.frames.map((f) => f.id);
+      const { failed } = await runQueue(ids, c.signal, 3, false); // unchanged scenes are skipped by content hash
       setStep(4, "done", c.signal.aborted ? "Stopped" : failed ? `Finished with ${failed} failed scene(s) — use Retry failed` : "Storyboard complete");
       if (c.signal.aborted) toast.message("Storyboard generation cancelled.");
       else if (failed) toast.error(`${failed} scene(s) failed. Use "Retry failed".`);
@@ -320,12 +416,13 @@ export function VisualStoryboard({
   /* ---------- editing ---------- */
   const removeFrame = (id: string) => {
     const f = p.frames.find((x) => x.id === id);
-    if (f?.imageKey && !p.frames.some((x) => x.id !== id && x.imageKey === f.imageKey)) deleteAsset(f.imageKey).catch(() => {});
+    const keys = new Set([f?.imageKey, ...(f?.versions ?? []).map((v) => v.key)].filter(Boolean) as string[]);
+    for (const k of keys) if (!p.frames.some((x) => x.id !== id && (x.imageKey === k || x.versions?.some((v) => v.key === k)))) deleteAsset(k).catch(() => {});
     setP((prev) => ({ ...prev, frames: renumber(prev.frames.filter((x) => x.id !== id)) }));
   };
   const duplicate = (id: string) => setP((prev) => {
     const i = prev.frames.findIndex((f) => f.id === id);
-    const copy: StoryFrame = { ...prev.frames[i], id: `${id}-copy-${Date.now().toString(36)}`, imageKey: undefined, status: "idle", error: undefined };
+    const copy: StoryFrame = { ...prev.frames[i], id: `${id}-copy-${Date.now().toString(36)}`, imageKey: undefined, versions: undefined, report: undefined, genHash: undefined, status: "idle", error: undefined };
     const next = [...prev.frames]; next.splice(i + 1, 0, copy);
     return { ...prev, frames: renumber(next) };
   });
@@ -375,7 +472,7 @@ export function VisualStoryboard({
 
   const clearAll = async () => {
     if (!confirm("Clear the whole storyboard, bibles and images saved in this browser?")) return;
-    for (const f of p.frames) if (f.imageKey) await deleteAsset(f.imageKey).catch(() => {});
+    for (const f of p.frames) for (const k of new Set([f.imageKey, ...(f.versions ?? []).map((v) => v.key)])) if (k) await deleteAsset(k).catch(() => {});
     setImages({}); setSelected(new Set()); setSteps([]);
     setP((prev) => ({ ...prev, frames: [], characters: [], locations: [] }));
   };
@@ -431,8 +528,24 @@ export function VisualStoryboard({
         </Field>
         {p.style === "custom" ? (
           <Field label="Custom style (broad traits, no artist names)"><Input value={p.customStyle} maxLength={300} onChange={(e) => setP({ ...p, customStyle: e.target.value })} placeholder="e.g. muted watercolor, soft grain" className="h-10" /></Field>
-        ) : <div />}
+        ) : (
+          <Field label="Image quality">
+            <Select value={p.quality ?? "cinematic"} onValueChange={(v) => setP({ ...p, quality: v as QualityMode })}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>{QUALITY_MODES.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}</SelectContent>
+            </Select>
+            <p className="mt-1 text-[10px] text-muted-foreground">{QUALITY_MODES.find((m) => m.id === (p.quality ?? "cinematic"))!.hint}</p>
+          </Field>
+        )}
       </div>
+      {p.style === "custom" && (
+        <div className="mt-3 max-w-xs"><Field label="Image quality">
+          <Select value={p.quality ?? "cinematic"} onValueChange={(v) => setP({ ...p, quality: v as QualityMode })}>
+            <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <SelectContent>{QUALITY_MODES.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}</SelectContent>
+          </Select>
+        </Field></div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         {!running ? (
@@ -486,13 +599,13 @@ export function VisualStoryboard({
                     <div className="relative bg-muted/40" style={{ aspectRatio: p.aspect.replace(":", " / ") }}>
                       {img ? <img src={img} alt={f.title} className="h-full w-full cursor-zoom-in object-cover" onClick={() => setLightbox(img)} /> : (
                         <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4 text-center text-xs text-muted-foreground">
-                          {f.status === "processing" ? <><Loader2 className="h-5 w-5 animate-spin" /> Generating…</> :
+                          {f.status === "processing" ? <><Loader2 className="h-5 w-5 animate-spin" /> {f.stage ?? "Generating…"}</> :
                            f.status === "queued" ? "Queued" :
                            f.status === "failed" ? <span className="text-destructive">{f.error}</span> :
                            f.status === "cancelled" ? "Cancelled" : "No image yet"}
                         </div>
                       )}
-                      {img && f.status === "processing" && <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-xs"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Regenerating…</div>}
+                      {img && f.status === "processing" && <div className="absolute inset-0 flex items-center justify-center bg-background/60 text-xs"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {f.stage ?? "Regenerating…"}</div>}
                       <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded-md bg-background/80 px-1.5 py-1">
                         <Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggleSel(f.id)} aria-label="Select scene" />
                         <GripVertical className="h-3.5 w-3.5 cursor-grab text-muted-foreground" />
@@ -515,10 +628,18 @@ export function VisualStoryboard({
                         <SelectContent>{[...new Set([f.cameraShot, ...SHOT_TYPES])].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                       </Select>
                       {f.editedPrompt && <div className="text-[10px] text-primary">Using edited prompt</div>}
+                      {f.stage && f.status !== "processing" && <div className="flex items-center gap-1 text-[10px] text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />{f.stage}</div>}
+                      {f.report && <QualityBadge report={f.report} />}
                       <div className="flex flex-wrap gap-1 pt-1">
                         <Button size="sm" variant="secondary" disabled={running} onClick={() => generateIds([f.id], `${img ? "Regenerating" : "Generating"} scene ${f.number}`)} className="h-7 gap-1 px-2 text-[11px]"><RefreshCw className="h-3 w-3" />{img ? "Regenerate" : "Generate"}</Button>
                         <Button size="sm" variant="outline" onClick={() => { setEditing(f); setDraftPrompt(f.editedPrompt ?? promptFor({ ...f, editedPrompt: undefined }, p)); }} className="h-7 gap-1 px-2 text-[11px]"><Pencil className="h-3 w-3" />Prompt</Button>
-                        <IconBtn label="Download" disabled={!img} onClick={() => img && downloadDataUrl(img, fileName(f))}><Download className="h-3 w-3" /></IconBtn>
+                        <Button size="sm" variant="outline" disabled={!img || running} onClick={() => inspectOnly(f.id)} className="h-7 gap-1 px-2 text-[11px]"><ShieldCheck className="h-3 w-3" />Inspect</Button>
+                        <Button size="sm" variant="outline" disabled={!img || running} onClick={() => { setFixing(f); setFixText(f.report?.correction ?? ""); }} className="h-7 gap-1 px-2 text-[11px]"><Sparkles className="h-3 w-3" />Correct</Button>
+                        <Button size="sm" variant="outline" disabled={(f.versions?.length ?? 0) < 1} onClick={() => setVersionsOf(f.id)} className="h-7 gap-1 px-2 text-[11px]"><History className="h-3 w-3" />Versions{f.versions?.length ? ` (${f.versions.length})` : ""}</Button>
+                        <IconBtn label="Download PNG" disabled={!img} onClick={() => img && downloadAs(img, fileName(f), "png")}><Download className="h-3 w-3" /></IconBtn>
+                        <IconBtn label="Download JPEG" disabled={!img} onClick={() => img && downloadAs(img, fileName(f), "jpeg")}><span className="text-[9px] font-bold">JPG</span></IconBtn>
+                        <IconBtn label="Download WebP" disabled={!img} onClick={() => img && downloadAs(img, fileName(f), "webp")}><span className="text-[9px] font-bold">WEBP</span></IconBtn>
+                        <label title="Replace image" className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-md hover:bg-muted/50"><ImageUp className="h-3 w-3" /><input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { replaceImage(f.id, e.target.files?.[0]); e.target.value = ""; }} /></label>
                         <IconBtn label="Duplicate" onClick={() => duplicate(f.id)}><Copy className="h-3 w-3" /></IconBtn>
                         <IconBtn label="Move up" disabled={i === 0} onClick={() => move(f.id, -1)}><ChevronUp className="h-3 w-3" /></IconBtn>
                         <IconBtn label="Move down" disabled={i === p.frames.length - 1} onClick={() => move(f.id, 1)}><ChevronDown className="h-3 w-3" /></IconBtn>
@@ -633,6 +754,52 @@ export function VisualStoryboard({
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!fixing} onOpenChange={(o) => !o && setFixing(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader><DialogTitle>Correct scene {fixing?.number}</DialogTitle></DialogHeader>
+          {fixing && (
+            <div className="space-y-3 text-xs">
+              {fixing.report?.issues.length ? <ul className="list-disc pl-4 text-muted-foreground">{fixing.report.issues.map((x, i) => <li key={i}>{x}</li>)}</ul> : null}
+              <Textarea value={fixText} maxLength={1500} onChange={(e) => setFixText(e.target.value)} placeholder="e.g. Remove the extra person on the left; keep everything else identical." className="min-h-[110px]" />
+              <p className="text-[10px] text-muted-foreground">Edits the current image (whole-image edit, no masking). The original stays in Versions.</p>
+              <div className="flex justify-end"><Button disabled={running || fixText.trim().length < 10} onClick={() => { const id = fixing.id; setFixing(null); correctOnly(id, fixText); }}>Apply correction</Button></div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!versionsOf} onOpenChange={(o) => { if (!o) { setVersionsOf(null); setCompare(null); } }}>
+        <DialogContent className="max-w-5xl">
+          <DialogHeader><DialogTitle>Image versions</DialogTitle></DialogHeader>
+          {(() => {
+            const f = p.frames.find((x) => x.id === versionsOf);
+            if (!f) return null;
+            const vs = [...(f.versions ?? [])].reverse();
+            return (
+              <div className="space-y-4 text-xs">
+                {compare && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {compare.map((k) => <img key={k} src={images[k]} alt="Version" className="w-full rounded-md border border-border/50" />)}
+                  </div>
+                )}
+                <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {vs.map((v) => (
+                    <div key={v.key} className={`rounded-md border p-1.5 ${v.key === f.imageKey ? "border-primary" : "border-border/50"}`}>
+                      {images[v.key] ? <img src={images[v.key]} alt={v.kind} className="w-full cursor-zoom-in rounded" onClick={() => setLightbox(images[v.key])} /> : <div className="p-4 text-muted-foreground">Missing</div>}
+                      <div className="mt-1 flex items-center justify-between"><span className="capitalize">{v.kind}</span><span className="text-muted-foreground">{new Date(v.createdAt).toLocaleTimeString()}</span></div>
+                      <div className="mt-1 flex gap-1">
+                        <Button size="sm" variant="secondary" disabled={v.key === f.imageKey} onClick={() => restoreVersion(f.id, v.key)} className="h-6 px-2 text-[10px]">{v.key === f.imageKey ? "Current" : "Restore"}</Button>
+                        <Button size="sm" variant="outline" disabled={!f.imageKey || v.key === f.imageKey} onClick={() => setCompare([f.imageKey!, v.key])} className="h-6 px-2 text-[10px]">Compare</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!lightbox} onOpenChange={(o) => !o && setLightbox(null)}>
         <DialogContent className="max-w-5xl"><DialogHeader><DialogTitle>Frame</DialogTitle></DialogHeader>{lightbox && <img src={lightbox} alt="Storyboard frame" className="w-full rounded-lg" />}</DialogContent>
       </Dialog>
@@ -680,4 +847,36 @@ function BibleCard({ title, image, fields, onUpload, onClearImage }: {
       </div>
     </div>
   );
+}
+
+function QualityBadge({ report }: { report: InspectReport }) {
+  const [open, setOpen] = useState(false);
+  const tone = report.status === "approved" ? "text-primary" : "text-destructive";
+  const label = report.status === "approved" ? "Inspected · no issues" : report.status === "unresolved" ? `Unresolved · ${report.issues.length} issue(s)` : `${report.issues.length} issue(s) found`;
+  return (
+    <div className="rounded-md border border-border/50 p-1.5 text-[10px]">
+      <button onClick={() => setOpen(!open)} className={`flex w-full items-center gap-1 ${tone}`}>
+        {report.status === "approved" ? <ShieldCheck className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}{label}
+        <span className="ml-auto text-muted-foreground">{open ? "Hide" : "Report"}</span>
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-0.5">
+          {report.checks.map((c, i) => (
+            <li key={i} className="flex gap-1"><span className={c.result === "issue" ? "text-destructive" : c.result === "pass" ? "text-primary" : "text-muted-foreground"}>{c.result === "issue" ? "✕" : c.result === "pass" ? "✓" : "?"}</span><span className="font-medium">{c.name}</span>{c.note && <span className="text-muted-foreground">— {c.note}</span>}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+async function downloadAs(dataUrl: string, name: string, fmt: "png" | "jpeg" | "webp") {
+  const base = name.replace(/\.png$/, "");
+  if (dataUrl.startsWith(`data:image/${fmt}`)) return downloadDataUrl(dataUrl, `${base}.${fmt === "jpeg" ? "jpg" : fmt}`);
+  const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl; });
+  const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+  c.getContext("2d")!.drawImage(img, 0, 0);
+  const out = c.toDataURL(`image/${fmt}`, 0.95);
+  if (!out.startsWith(`data:image/${fmt}`)) { toast.error(`${fmt.toUpperCase()} is not supported by this browser.`); return; }
+  downloadDataUrl(out, `${base}.${fmt === "jpeg" ? "jpg" : fmt}`);
 }
